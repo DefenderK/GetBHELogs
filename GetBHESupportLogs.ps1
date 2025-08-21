@@ -109,23 +109,28 @@ function Show-Banner {
 
 function Wait-ForEnter {
     try {
-        Write-Host "Press Enter to collect logs, (H)elp for parameters, or Q to quit"
         while ($true) {
+            Write-Host "Press Enter to collect logs, (H)elp for parameters, or Q to quit"
             $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             if ($key.VirtualKeyCode -eq 13) { return $true }
             if ($key.Character -in @('q','Q')) { return $false }
             if ($key.Character -in @('h','H')) { 
                 Show-CommandLineHelp
+                # Continue the loop - will show prompt again
             }
         }
     } catch {
-        $input = Read-Host
-        if ($input -match '^[Qq]$') { return $false }
-        if ($input -match '^[Hh]$') { 
-            Show-CommandLineHelp
-            return Wait-ForEnter
+        while ($true) {
+            Write-Host "Press Enter to collect logs, (H)elp for parameters, or Q to quit"
+            $input = Read-Host
+            if ($input -match '^[Qq]$') { return $false }
+            if ($input -match '^[Hh]$') { 
+                Show-CommandLineHelp
+                # Continue the loop - will show prompt again
+            } else {
+                return $true
+            }
         }
-        return $true
     }
 }
 
@@ -756,3 +761,4 @@ try {
 } finally {
     try { Stop-Transcript | Out-Null } catch { }
 }
+
