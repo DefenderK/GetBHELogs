@@ -140,30 +140,55 @@ From an elevated PowerShell prompt in the script directory:
 ### Startup
 
 ```
-===========================================
-   BHE Logs Collector
-===========================================
-Press Enter to collect logs, (H)elp for command line parameters, or Q to quit
+========================================
+        BHE Logs Collector v.1.1        
+========================================
+WARNING: Note: This collection will include the below data!
+WARNING: Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.
+WARNING: settings.json will be collected; use -ExcludeSettings to skip.
+Press Enter to collect logs, (H)elp for parameters, or Q to quit
 ```
 
 ### Collection Progress
 
 ```
-[OK] Application event log exported (1200 entries)
-[OK] System event log exported (850 entries)
-[OK] service.log copied
-[OK] settings.json copied
-[OK] 10 files from log_archive copied
+[INFO] Output folder: C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237
+[INFO] Using service 'SHDelegator' (DisplayName: 'SharpHoundDelegator') running as 'DOMAIN\svc_sharphound'
+[INFO] Resolved service profile path: C:\Users\svc_sharphound
+Collecting Windows Event Logs...
+[INFO] Exporting Application and System event logs...
+  - Application Event Log ... Collected - EVTX
+  - System Event Log ... Collected - EVTX
+Collecting BloodHoundEnterprise files...
+  - BHE log_archive ... Collected
+  - BHE service.log ... Collected
+  - BHE settings.json ... Collected
+
+[INFO] Creating zip archive...
+  - Zip Archive ... Created
+\nCollection complete.
+Folder: C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237
+Zip:    C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237.zip
 ```
 
 ### Summary
 
 ```
-Collection complete.
-Output folder: C:\Users\Alice\Desktop\BHE_SupportLogs_20250120_143215
-Zip created:   C:\Users\Alice\Desktop\BHE_SupportLogs_20250120_143215.zip
+Collected:
+  - Application Event Log -> C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237\Application.evtx
+  - System Event Log -> C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237\System.evtx
+  - BHE log_archive -> C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237\BloodHoundEnterprise\log_archive
+  - BHE service.log -> C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237\BloodHoundEnterprise\service.log
+  - BHE settings.json -> C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237\BloodHoundEnterprise\settings.json
+  - Zip Archive -> C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237.zip
+
+Output folder: C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237
+Zip archive:  C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237.zip
+Open folder: file:///C:/Users/administrator.DEFENDERK/Desktop/BHE_SupportLogs_20250821_092237
+Open zip:    file:///C:/Users/administrator.DEFENDERK/Desktop/BHE_SupportLogs_20250821_092237.zip
 
 Press O to open output folder, Z to open at zip, or any other key to exit.
+Choice: 
 ```
 
 ---
@@ -179,3 +204,4 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
