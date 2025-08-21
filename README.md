@@ -2,7 +2,7 @@
 # BHE Logs Collector
 Collect Windows event logs and BloodHound Enterprise (BHE) SharpHound service artifacts into a single zip.  
 Designed for support and troubleshooting, with both interactive and fully non-interactive modes.
-
+````
 ---
 
 ## Quick Start
@@ -199,5 +199,6 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
