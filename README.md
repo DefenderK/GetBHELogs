@@ -1,11 +1,6 @@
 ````markdown
 # BHE Logs Collector
-
-![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue?logo=powershell)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Last Commit](https://img.shields.io/github/last-commit/your-org-or-user/your-repo)
-
-Collect Windows event logs and BloodHound Enterprise (BHE) service artifacts into a single zip.  
+Collect Windows event logs and BloodHound Enterprise (BHE) SharpHound service artifacts into a single zip.  
 Designed for support and troubleshooting, with both interactive and fully non-interactive modes.
 
 ---
@@ -204,4 +199,5 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
