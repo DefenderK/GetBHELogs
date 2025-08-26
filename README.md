@@ -29,7 +29,7 @@ From an **elevated PowerShell prompt** in the script directory:
 .\GetBHESupportLogs.ps1 -OutputRoot "C:\Temp"
 
 # Set log levels for SharpHound and restart service automatically
-.\GetBHESupportLogs.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegatorAfterChange
+.\GetBHESupportLogs.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
 
 
 ````
@@ -40,13 +40,13 @@ From an **elevated PowerShell prompt** in the script directory:
 
 * Exports **Application** and **System** event logs (`.evtx`; falls back to XML if needed).
 * Collects BHE artifacts from the **Delegator service account profile**:
-
   * `BloodHoundEnterprise/log_archive/`
   * `BloodHoundEnterprise/service.log`
   * `BloodHoundEnterprise/settings.json`
+
 * Creates a **timestamped folder and zip** in the chosen output directory (Desktop by default).
 * Shows per-item status and a final summary.
-* When AzureHound is selected, in addition to the event logs, collects `azurehound.log` from `C:\\Program Files\\AzureHound Enterprise\\azurehound.log` if present.
+* When AzureHound is selected, in addition to the event logs, collects `azurehound.log` from `C:\Program Files\AzureHound Enterprise\azurehound.log` if present.
 * When using `-All`, collects **all** logs simultaneously: SharpHound, AzureHound, and Windows event logs.
 
 ---
@@ -99,17 +99,19 @@ From an elevated PowerShell prompt in the script directory:
 ### Interactive flow
 
 * Displays an ASCII banner.
-* Prompts: **Press Enter to collect logs, (H)elp for command line parameters, or Q to quit**.
+* Prompts: **Press Enter to collect logs, or Q to quit**.
+* Displays ouput log location.
+* Prompts: Select collection target: (S)harpHound or (A)zureHound
+  Choice [S/A]:
 * Displays per-item status as logs and files are collected.
 * Prints a summary and offers: **Press O to open output folder, Z to open at zip, or any other key to exit**.
-* On start, you can choose to collect for **SharpHound** (Delegator) or **AzureHound**.
 * When using `-All`, all logs are collected regardless of interactive target selection.
 
 **Note**: The script is always interactive by default. Use `-All` to collect everything automatically, or run without parameters for selective collection.
 
 ### Configuration-only mode
 
-* When using **only** configuration/service parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegatorAfterChange`, `-SetAzureVerbosity`, `-RestartAzureHound`), the script skips the collection interface entirely.
+* When using **only** configuration/service parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegatorAfterChange`, `-SetAzureVerbosity`, `-RestartAzureHound`), the script skips the collection options entirely.
 * Only makes the requested changes and shows verification of what was updated.
 * Useful for troubleshooting when you need to change settings but don't want to collect logs yet.
 * Example: `.\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound` will only change verbosity and restart the service.
@@ -127,19 +129,19 @@ From an elevated PowerShell prompt in the script directory:
 * `-ExcludeSettings [switch]` — Skip copying `settings.json` from the BHE folder.
 * `-SetLogLevel [Trace|Debug|Information]` — Update LogLevel in `settings.json` before collection.
 * `-SetEnumerationLogLevel [Trace|Debug|Information]` — Update EnumerationLogLevel in `settings.json`.
-* `-RestartDelegatorAfterChange [switch]` — Automatically restart the Delegator service after log level changes.
-* `-LogArchiveNumber [int]` — Copy only the N most recent files from the log\_archive folder.
-* `-SetAzureVerbosity [0|1|2]` — Set AzureHound service log verbosity in `C:\\ProgramData\\azurehound\\config.json` (0=Default, 1=Debug, 2=Trace).
+* `-RestartDelegator [switch]` — Automatically restart the Delegator service (useful after log level changes).
+* `-LogArchiveNumber [int]` — Copy only the N most recent files from the log_archive folder.
+* `-SetAzureVerbosity [0|1|2]` — Set AzureHound service log verbosity in `C:\ProgramData\azurehound\config.json` (0=Default, 1=Debug, 2=Trace).
 * `-RestartAzureHound [switch]` — Restart the `AzureHound` Windows service.
 
 ---
 
 ## Notes
 
-* Service resolution tries matches in this order:
+* Service resolution tries matching in this order:
   Name (`SHDelegator`), DisplayName (`SharpHoundDelegator`), Description (`SharpHound Delegation Service`).
 * If not found, BHE file collection may show as *NotFound*.
-* AzureHound service name and display name: `AzureHound`. Description: "The official tool for collecting Azure data for BloodHound and BloodHound Enterprise." Configuration file path: `C:\\ProgramData\\azurehound\\config.json` (`verbosity` set to 0, 1, or 2).
+* AzureHound service name and display name: `AzureHound`. Description: "The official tool for collecting Azure data for BloodHound and BloodHound Enterprise." Configuration file path: `C:\ProgramData\azurehound\config.json` (`verbosity` set to 0, 1, or 2).
 * **Privacy:** Event logs may contain PII; `settings.json` may contain endpoints or config.
   Use `-ExcludeEventLogs` and/or `-ExcludeSettings` if needed.
 
@@ -149,7 +151,7 @@ From an elevated PowerShell prompt in the script directory:
 
 * Folder: `BHE_SupportLogs_YYYYMMDD_HHMMSS`
 * Zip: `BHE_SupportLogs_YYYYMMDD_HHMMSS.zip`
-* Transcript: `collectorlogs.log` inside the folder
+* Tool Collector Transcript: `collectorlogs.log` inside the folder
 
 ---
 
@@ -162,17 +164,11 @@ From an elevated PowerShell prompt in the script directory:
 
 ## The `-All` Parameter
 
-The `-All` parameter is a powerful feature that allows you to collect **all** logs in a single run:
+The `-All` parameter is a quick and easy feature that allows you to collect **all** logs in a single run:
 
 * **SharpHound logs**: service.log, settings.json, log_archive folder contents
 * **AzureHound logs**: azurehound.log  
 * **Windows Event Logs**: Application and System logs
-
-### When to use `-All`:
-
-* **Comprehensive troubleshooting**: When you need all available diagnostic information
-* **Support cases**: When collecting logs for technical support teams
-* **Automation**: Perfect for scheduled log collection scripts
 
 ### Examples:
 
@@ -197,12 +193,12 @@ The `-All` parameter is a powerful feature that allows you to collect **all** lo
 
 ```
 ========================================
-        BHE Logs Collector v.2.0        
+        BHE Logs Collector v.2.0       
 ========================================
-WARNING: Note: This collection will include the below data!
-WARNING: Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.
-WARNING: settings.json will be collected; use -ExcludeSettings to skip.
-Press Enter to collect logs, (H)elp for parameters, or Q to quit
+WARNING: This collection will include the below data!
+-------> Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.
+-------> settings.json will be collected; use -ExcludeSettings to skip.
+Press Enter to collect logs, or Q to quit
 ```
 
 ### Collection Progress
@@ -258,6 +254,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
