@@ -5,10 +5,14 @@
 .DESCRIPTION
     This tool exports Windows Application and System event logs, collects
     BloodHound Enterprise log files and settings from the profile of the account
-    running the SHDelegator service, and compresses the results into a zip archive.
+    running the SHDelegator service, and additionally can also collect AzureHound logs, then compresses the results into a zip archive.
 
     It displays a simple text UI with progress for each item, a summary of collected
     and missing items, and options to open the output folder or the zip file.
+
+    The tool can collect SharpHound logs, AzureHound logs, or both using the -All
+    parameter. When using -All, all logs are collected regardless of interactive
+    target selection.
 
     NOTE: Log level changes (LogLevel and EnumerationLogLevel) and service restarts
     are controlled only via command-line parameters; there are no interactive prompts
@@ -18,33 +22,13 @@
     Root directory where the output folder and zip will be created. Defaults to the
     current user's Desktop.
 
-.PARAMETER ServiceName
-    The Windows service name to resolve the run-as account from. Defaults to
-    'SHDelegator'. The script also attempts to match by DisplayName
-    ('SharpHoundDelegator') or Description ('SharpHound Delegation Service').
+.PARAMETER All
+    Collect all logs: SharpHound, AzureHound, and Windows event logs. When used,
+    the script will collect everything regardless of the interactive target selection.
 
-.PARAMETER AutoStart
-    Skip the initial "Press Enter / Help / Quit" screen and start immediately.
-
-.PARAMETER ExcludeEventLogs
-    Do not collect Windows Application and System event logs.
-
-.PARAMETER ExcludeSettings
-    Do not collect settings.json and skip any setting changes.
-
-.PARAMETER SetLogLevel
-    Sets the BHE settings.json LogLevel. Valid values: Trace, Debug, Information.
-
-.PARAMETER SetEnumerationLogLevel
-    Sets the BHE settings.json EnumerationLogLevel. Valid values: Trace, Debug, Information.
-
-.PARAMETER RestartDelegatorAfterChange
-    If specified along with -SetLogLevel and/or -SetEnumerationLogLevel, the script
-    restarts the SHDelegator service automatically after applying the change(s).
-
-.PARAMETER LogArchiveNumber
-    Copy only N most recent files from the log_archive directory. If not specified,
-    the entire log_archive directory is copied (if present).
+.PARAMETER Help
+    Display command line parameters and examples. When used, the script shows help
+    and exits without collecting logs or making changes.
 
 .EXAMPLE
     .\GetBHESupportLogs.ps1
@@ -53,12 +37,20 @@
     .\GetBHESupportLogs.ps1 -OutputRoot C:\Temp
 
 .EXAMPLE
-    # Set log levels via parameters and restart service automatically
-    .\GetBHESupportLogs.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegatorAfterChange
+    # Collect all logs (SharpHound, AzureHound, and event logs)
+    .\GetBHESupportLogs.ps1 -All
+
+.EXAMPLE
+    # Set log levels via parameters and restart service explicitly
+    .\GetBHESupportLogs.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
 
 .EXAMPLE
     # Collect with exclusions and limit log_archive files
-    .\GetBHESupportLogs.ps1 -ExcludeEventLogs -ExcludeSettings -LogArchiveNumber 10
+    .\GetBHESupportLogs.ps1 -ExcludeEventLogs -ExcludeSettings -LogArchiveNumber 5
+
+.EXAMPLE
+    # Show command line help
+    .\GetBHESupportLogs.ps1 -Help
 
 .NOTES
     - Windows PowerShell 5.1+ is supported (PowerShell 7+ also works)
@@ -70,15 +62,19 @@
 param(
     [string]$OutputRoot = "$env:USERPROFILE\Desktop",
     [string]$ServiceName = "SHDelegator",
-    [switch]$AutoStart,
     [switch]$ExcludeEventLogs,
     [switch]$ExcludeSettings,
     [ValidateSet('Trace','Debug','Information')]
     [string]$SetLogLevel,
     [ValidateSet('Trace','Debug','Information')]
     [string]$SetEnumerationLogLevel,
-    [switch]$RestartDelegatorAfterChange,
-    [int]$LogArchiveNumber
+    [switch]$RestartDelegator,
+    [int]$LogArchiveNumber,
+    [ValidateSet(0,1,2)]
+    [int]$SetAzureVerbosity,
+    [switch]$RestartAzureHound,
+    [switch]$All,
+    [switch]$Help
 )
 
 Set-StrictMode -Version Latest
@@ -96,7 +92,7 @@ function Write-Warn {
 
 # Simple ASCII banner and UI helpers
 function Show-Banner {
-    $label = 'BHE Logs Collector v.1.1'
+    $label = 'BHE Logs Collector v.2.0'
     $width = [Math]::Max($label.Length + 8, 40)
     $border = ('=' * $width)
     $padLeft = [int][Math]::Floor(($width - $label.Length) / 2)
@@ -109,23 +105,37 @@ function Show-Banner {
 
 function Wait-ForEnter {
     try {
+        $loopCount = 0
         while ($true) {
-            Write-Host "Press Enter to collect logs, (H)elp for parameters, or Q to quit"
+            $loopCount++
+            if ($loopCount -gt 10) {
+                Write-Host "Too many loops detected, exiting..." -ForegroundColor Red
+                return $false
+            }
+            Write-Host "Press Enter to collect logs, or Q to quit"
             $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             if ($key.VirtualKeyCode -eq 13) { return $true }
             if ($key.Character -in @('q','Q')) { return $false }
             if ($key.Character -in @('h','H')) { 
                 Show-CommandLineHelp
+                Write-Host ""
                 # Continue the loop - will show prompt again
             }
         }
     } catch {
+        $loopCount = 0
         while ($true) {
-            Write-Host "Press Enter to collect logs, (H)elp for parameters, or Q to quit"
+            $loopCount++
+            if ($loopCount -gt 10) {
+                Write-Host "Too many loops detected, exiting..." -ForegroundColor Red
+                return $false
+            }
+
             $input = Read-Host
             if ($input -match '^[Qq]$') { return $false }
             if ($input -match '^[Hh]$') { 
                 Show-CommandLineHelp
+                Write-Host ""
                 # Continue the loop - will show prompt again
             } else {
                 return $true
@@ -136,21 +146,27 @@ function Wait-ForEnter {
 
 function Show-CommandLineHelp {
     Write-Host ""; Write-Host "Command Line Parameters:" -ForegroundColor Cyan
+    Write-Host "  -Help                        Show this help information" -ForegroundColor White
     Write-Host "  -OutputRoot [path]           Output folder (default: Desktop)" -ForegroundColor White
-    Write-Host "  -ServiceName [name]          Service name (default: SHDelegator)" -ForegroundColor White
-    Write-Host "  -AutoStart                   Skip prompts, auto-collect" -ForegroundColor White
+    Write-Host "  -All                         Collect all SharpHound, AzureHound, and event logs" -ForegroundColor White
     Write-Host "  -ExcludeEventLogs            Skip Windows event logs" -ForegroundColor White
     Write-Host "  -ExcludeSettings             Skip settings.json" -ForegroundColor White
     Write-Host "  -SetLogLevel [level]         Set LogLevel (Trace|Debug|Information)" -ForegroundColor White
     Write-Host "  -SetEnumerationLogLevel [l]  Set EnumerationLogLevel (Trace|Debug|Information)" -ForegroundColor White
-    Write-Host "  -RestartDelegatorAfterChange Auto-restart service after changes (no prompt)" -ForegroundColor White
+    Write-Host "  -RestartDelegator            Restart SHDelegator service without changing settings" -ForegroundColor White
     Write-Host "  -LogArchiveNumber [int]      Copy only N most recent files from log_archive" -ForegroundColor White
+    Write-Host "  -SetAzureVerbosity [0|1|2]   Set AzureHound verbosity (0=Default,1=Debug,2=Trace)" -ForegroundColor White
+    Write-Host "  -RestartAzureHound           Restart AzureHound service (with or without -SetAzureVerbosity)" -ForegroundColor White
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Cyan
-    Write-Host "  .\GetBHESupportLogsTool.ps1 -OutputRoot C:\Temp -AutoStart" -ForegroundColor DarkCyan
-    Write-Host "  .\GetBHESupportLogsTool.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegatorAfterChange" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -Help" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -OutputRoot C:\Temp" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -All" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -ExcludeEventLogs -ExcludeSettings" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -LogArchiveNumber 10" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -RestartDelegator" -ForegroundColor DarkCyan
 }
 
 function Add-Status {
@@ -293,7 +309,7 @@ function Collect-BHEFilesWithStatus {
                 Print-ItemResult -Name 'BHE log_archive' -Status 'Collected' -Note "Most recent $($filesToCopy.Count) of $($allFiles.Count) files"
             } else {
                 # Copy entire folder
-                Copy-Item -LiteralPath $logArchiveSrc -Destination $logArchiveDest -Recurse -Force -ErrorAction Stop
+                Get-ChildItem -LiteralPath $logArchiveSrc | Copy-Item -Destination $logArchiveDest -Recurse -Force -ErrorAction Stop
                 Add-Status -List $StatusList -Name 'BHE log_archive' -Path $logArchiveDest -Status 'Collected'
                 Print-ItemResult -Name 'BHE log_archive' -Status 'Collected'
             }
@@ -362,14 +378,23 @@ function Print-Summary {
         $failed | ForEach-Object { Write-Host ("  - {0}: Failed - {1}" -f $_.Name, $_.Note) -ForegroundColor Red }
     }
 
-    Write-Host ""; Write-Host ("Output folder: {0}" -f $WorkDir)
-    Write-Host ("Zip archive:  {0}" -f $ZipPath)
+    Write-Host ""; Write-Host ("Output folder: {0}" -f $WorkDir) -ForegroundColor DarkCyan
+    Write-Host ("Zip archive:  {0}" -f $ZipPath) -ForegroundColor DarkCyan
     try {
         $workUri = (New-Object System.Uri($WorkDir)).AbsoluteUri
         $zipUri = (New-Object System.Uri($ZipPath)).AbsoluteUri
-        Write-Host ("Open folder: {0}" -f $workUri) -ForegroundColor DarkCyan
-        Write-Host ("Open zip:    {0}" -f $zipUri) -ForegroundColor DarkCyan
+        #Write-Host ("Open folder: {0}" -f $workUri) -ForegroundColor DarkCyan
+        #Write-Host ("Open zip:    {0}" -f $zipUri) -ForegroundColor DarkCyan
     } catch { }
+}
+
+function Prompt-SelectTarget {
+    Write-Host ""; Write-Host "Select collection target: (S)harpHound or (A)zureHound" -ForegroundColor Cyan
+    $choice = Read-Host "Choice [S/A]"
+    switch ($choice.ToUpperInvariant()) {
+        'A' { return 'AzureHound' }
+        default { return 'SharpHound' }
+    }
 }
 
 <#
@@ -419,6 +444,23 @@ function Get-ServiceObject {
 
     Write-Warn "Service not found by name '$Name', display name 'SharpHoundDelegator', or description 'SharpHound Delegation Service'."
     Write-Warn "Proceeding without service context; current user's %AppData% will be used for BHE files if present."
+    return $null
+}
+
+function Get-AzureHoundServiceObject {
+    try {
+        $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='AzureHound'" -ErrorAction Stop
+        if ($null -ne $svc) { return ($svc | Select-Object -First 1) }
+    } catch { }
+    try {
+        $svc = Get-CimInstance -ClassName Win32_Service -Filter "DisplayName='AzureHound'" -ErrorAction Stop
+        if ($null -ne $svc) { return ($svc | Select-Object -First 1) }
+    } catch { }
+    try {
+        $svc = Get-CimInstance -ClassName Win32_Service -Filter "Description='The official tool for collecting Azure data for BloodHound and BloodHound Enterprise.'" -ErrorAction Stop
+        if ($null -ne $svc) { return ($svc | Select-Object -First 1) }
+    } catch { }
+    Write-Warn "AzureHound service not found by name/display/description."
     return $null
 }
 
@@ -649,7 +691,98 @@ function Try-RestartDelegatorService {
     try {
         Write-Info "Restarting service '$($svc.Name)'..."
         Restart-Service -InputObject $svc -ErrorAction Stop
-        Write-Info "Service restarted."
+        # Wait up to 30 seconds for the service to report Running
+        $timeout = [TimeSpan]::FromSeconds(30)
+        try {
+            $svc.WaitForStatus('Running', $timeout)
+        } catch { }
+        $svc.Refresh()
+        if ($svc.Status -eq 'Running') {
+            Write-Info "Service '$($svc.Name)' is Running. Restart verified."
+        } else {
+            Write-Warn "Service '$($svc.Name)' did not reach Running state within $($timeout.TotalSeconds) seconds (current: $($svc.Status))."
+        }
+    } catch {
+        Write-Warn "Failed to restart service '$($svc.Name)': $($_.Exception.Message)"
+    }
+}
+
+function Collect-AzureHoundFilesWithStatus {
+    param(
+        [string]$DestinationFolder,
+        [System.Collections.IList]$StatusList
+    )
+
+    Write-Host "Collecting AzureHound files..." -ForegroundColor Cyan
+    $azOut = Join-Path $DestinationFolder 'AzureHound'
+    New-Item -ItemType Directory -Path $azOut -Force | Out-Null
+
+    $azLogSrc = 'C:\\Program Files\\AzureHound Enterprise\\azurehound.log'
+    $azLogDest = Join-Path $azOut 'azurehound.log'
+    if (Test-Path -LiteralPath $azLogSrc) {
+        try {
+            Copy-Item -LiteralPath $azLogSrc -Destination $azLogDest -Force -ErrorAction Stop
+            Add-Status -List $StatusList -Name 'AzureHound azurehound.log' -Path $azLogDest -Status 'Collected'
+            Print-ItemResult -Name 'AzureHound azurehound.log' -Status 'Collected'
+        } catch {
+            Add-Status -List $StatusList -Name 'AzureHound azurehound.log' -Path $azLogDest -Status 'Failed' -Note $($_.Exception.Message)
+            Print-ItemResult -Name 'AzureHound azurehound.log' -Status 'Failed' -Note $($_.Exception.Message)
+        }
+    } else {
+        Add-Status -List $StatusList -Name 'AzureHound azurehound.log' -Path $azLogSrc -Status 'NotFound'
+        Print-ItemResult -Name 'AzureHound azurehound.log' -Status 'NotFound'
+    }
+}
+
+function Set-AzureHoundVerbosity {
+    param(
+        [int]$Verbosity,
+        [System.Collections.IList]$StatusList
+    )
+
+    if ($PSBoundParameters.ContainsKey('Verbosity') -eq $false) { return }
+    $cfgPath = 'C:\\ProgramData\\azurehound\\config.json'
+    if (-not (Test-Path -LiteralPath $cfgPath)) {
+        Add-Status -List $StatusList -Name 'AzureHound config.json verbosity' -Path $cfgPath -Status 'NotFound'
+        Print-ItemResult -Name 'AzureHound config.json verbosity' -Status 'NotFound'
+        return
+    }
+    $backupPath = $cfgPath + ('.bak_' + (Get-Date -Format 'yyyyMMdd_HHmmss'))
+    try { Copy-Item -LiteralPath $cfgPath -Destination $backupPath -Force -ErrorAction Stop } catch { }
+    try {
+        $json = Get-Content -LiteralPath $cfgPath -Raw | ConvertFrom-Json -ErrorAction Stop
+        if ($null -eq $json) { throw 'config.json parsed as null' }
+        $json.verbosity = [int]$Verbosity
+        $json | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $cfgPath -Encoding UTF8 -Force
+        Add-Status -List $StatusList -Name 'AzureHound config.json verbosity' -Path $cfgPath -Status 'Updated' -Note $Verbosity
+        Print-ItemResult -Name 'AzureHound config.json verbosity' -Status 'Updated' -Note $Verbosity
+    } catch {
+        Add-Status -List $StatusList -Name 'AzureHound config.json verbosity' -Path $cfgPath -Status 'Failed' -Note $($_.Exception.Message)
+        Print-ItemResult -Name 'AzureHound config.json verbosity' -Status 'Failed' -Note $($_.Exception.Message)
+    }
+}
+
+function Try-RestartAzureHoundService {
+    try {
+        $svc = Get-Service -Name 'AzureHound' -ErrorAction Stop
+    } catch {
+        try { $svc = Get-Service -DisplayName 'AzureHound' -ErrorAction Stop } catch { $svc = $null }
+    }
+    if (-not $svc) { Write-Warn "AzureHound service not found for restart."; return }
+    try {
+        Write-Info "Restarting service '$($svc.Name)'..."
+        Restart-Service -InputObject $svc -ErrorAction Stop
+        # Wait up to 30 seconds for the service to report Running
+        $timeout = [TimeSpan]::FromSeconds(30)
+        try {
+            $svc.WaitForStatus('Running', $timeout)
+        } catch { }
+        $svc.Refresh()
+        if ($svc.Status -eq 'Running') {
+            Write-Info "Service '$($svc.Name)' is Running. Restart verified."
+        } else {
+            Write-Warn "Service '$($svc.Name)' did not reach Running state within $($timeout.TotalSeconds) seconds (current: $($svc.Status))."
+        }
     } catch {
         Write-Warn "Failed to restart service '$($svc.Name)': $($_.Exception.Message)"
     }
@@ -663,10 +796,87 @@ $transcriptPath = Join-Path $workDir 'collectorlogs.log'
 
 Show-Banner
 
-# Warn about potentially sensitive content
-Write-Warning 'Note: This collection will include the below data!'
-if (-not $ExcludeEventLogs) { Write-Warning 'Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.' }
-if (-not $ExcludeSettings) { Write-Warning 'settings.json will be collected; use -ExcludeSettings to skip.' }
+# Check if help was requested
+if ($Help.IsPresent) {
+    Show-CommandLineHelp
+    Write-Host ""
+    Write-Host "For more detailed information, see the README.md file." -ForegroundColor Cyan
+    return
+}
+
+# Determine early whether this is a configuration-only invocation (no collection)
+$__configOnlyParams = @('SetLogLevel', 'SetEnumerationLogLevel', 'RestartDelegator', 'SetAzureVerbosity', 'RestartAzureHound')
+$__hasConfigParams = $false
+foreach ($__p in $__configOnlyParams) {
+    if ($PSBoundParameters.ContainsKey($__p)) { $__hasConfigParams = $true; break }
+}
+$__hasCollectionToggles = $PSBoundParameters.ContainsKey('ExcludeEventLogs') -or $PSBoundParameters.ContainsKey('ExcludeSettings') -or $PSBoundParameters.ContainsKey('LogArchiveNumber')
+$__suppressCollectionWarnings = $__hasConfigParams -and -not $__hasCollectionToggles -and -not $All.IsPresent -and -not $Help.IsPresent
+
+# Warn about potentially sensitive content (skip in configuration-only mode)
+if (-not $__suppressCollectionWarnings) {
+    Write-Warning 'This collection will include the below data!'
+    if ($All.IsPresent) { 
+        Write-Host '-------> ALL logs will be collected: SharpHound, AzureHound, and Windows event logs.' -ForegroundColor DarkCyan
+    } else {
+        if (-not $ExcludeEventLogs) { Write-Host '-------> Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.' -ForegroundColor DarkCyan } 
+        if (-not $ExcludeSettings) { Write-Host '-------> settings.json will be collected; use -ExcludeSettings to skip.' -ForegroundColor DarkCyan } 
+    }
+}
+
+# Check if only configuration/service parameters are specified (no collection)
+$configOnlyParams = @('SetLogLevel', 'SetEnumerationLogLevel', 'RestartDelegator', 'SetAzureVerbosity', 'RestartAzureHound')
+$hasConfigParams = $false
+foreach ($param in $configOnlyParams) {
+    if ($PSBoundParameters.ContainsKey($param)) {
+        $hasConfigParams = $true
+        break
+    }
+}
+
+# If only config params are specified, skip collection and just make changes
+if ($hasConfigParams -and -not $PSBoundParameters.ContainsKey('ExcludeEventLogs') -and -not $PSBoundParameters.ContainsKey('ExcludeSettings') -and -not $PSBoundParameters.ContainsKey('LogArchiveNumber') -and -not $PSBoundParameters.ContainsKey('All') -and -not $PSBoundParameters.ContainsKey('Help')) {
+    Write-Host "Configuration-only mode detected. Making requested changes..." -ForegroundColor Cyan
+    
+    # Status accumulator for changes
+    $records = New-Object System.Collections.ArrayList
+    
+    # Handle SharpHound config changes and/or explicit restart request
+    if ($PSBoundParameters.ContainsKey('SetLogLevel') -or $PSBoundParameters.ContainsKey('SetEnumerationLogLevel') -or $PSBoundParameters.ContainsKey('RestartDelegator')) {
+        $svc = Get-ServiceObject -Name $ServiceName
+        $profilePath = $null
+        if ($svc) {
+            Write-Info "Using service '$($svc.Name)' (DisplayName: '$($svc.DisplayName)') running as '$($svc.StartName)'"
+            $profilePath = Get-ProfilePathFromServiceStartName -StartName $svc.StartName
+            if ($profilePath) {
+                Write-Info "Resolved service profile path: $profilePath"
+            } else {
+                Write-Warn 'Could not resolve service profile path; will attempt current user profile.'
+            }
+        }
+        
+        $desiredLevel = $SetLogLevel
+        $desiredEnumLevel = $SetEnumerationLogLevel
+        $didChange = $false
+        if ($desiredLevel) { Set-BHELogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredLevel -StatusList $records; $didChange = $true }
+        if ($desiredEnumLevel) { Set-BHEEnumerationLogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredEnumLevel -StatusList $records; $didChange = $true }
+        if ($RestartDelegator) { Try-RestartDelegatorService -Name $ServiceName }
+    }
+    
+    # Handle AzureHound config changes
+    if ($PSBoundParameters.ContainsKey('SetAzureVerbosity')) { 
+        Set-AzureHoundVerbosity -Verbosity $SetAzureVerbosity -StatusList $records 
+    }
+    if ($RestartAzureHound) { 
+        Try-RestartAzureHoundService 
+    }
+    
+    # Show summary of changes made
+    Write-Host ""
+    Write-Host "Configuration changes completed:" -ForegroundColor Green
+    Print-Summary -StatusList $records -WorkDir "N/A" -ZipPath "N/A"
+    return
+}
 
 # Validate OutputRoot exists and is writable
 try {
@@ -681,11 +891,16 @@ try {
     return
 }
 
-$interactive = $Host.UI -and $Host.UI.RawUI -and -not $AutoStart.IsPresent -and $PSBoundParameters.ContainsKey('AutoStart') -eq $false
+$interactive = $Host.UI -and $Host.UI.RawUI
 if ($interactive) {
-    if (-not (Wait-ForEnter)) {
-        Write-Host "Exiting by user request." -ForegroundColor Yellow
-        return
+    try {
+        if (-not (Wait-ForEnter)) {
+            Write-Host "Exiting by user request." -ForegroundColor Yellow
+            return
+        }
+    } catch {
+        Write-Host "Interactive mode failed, falling back to non-interactive..." -ForegroundColor Yellow
+        $interactive = $false
     }
 }
 
@@ -697,50 +912,85 @@ try {
         exit 1
     }
 
-    try { Start-Transcript -Path $transcriptPath -ErrorAction SilentlyContinue | Out-Null } catch { }
+    try { 
+        # Ensure no transcript is already running
+        try { Stop-Transcript -ErrorAction SilentlyContinue | Out-Null } catch { }
+        Start-Transcript -Path $transcriptPath -ErrorAction SilentlyContinue | Out-Null 
+    } catch { }
 
     Write-Info "Output folder: $workDir"
 
     # Status accumulator used across collection stages
     $records = New-Object System.Collections.ArrayList
 
-    # Resolve service and profile path (for settings.json and file collection)
-    $svc = Get-ServiceObject -Name $ServiceName
+    # Determine collection mode
+    $mode = 'SharpHound'
+    if ($All.IsPresent) {
+        $mode = 'All'
+    } elseif ($interactive) { 
+        $mode = Prompt-SelectTarget 
+    }
+
+    # Resolve service and profile path (for settings.json and file collection) when SharpHound or All selected
+    $svc = $null
     $profilePath = $null
-    if ($svc) {
-        Write-Info "Using service '$($svc.Name)' (DisplayName: '$($svc.DisplayName)') running as '$($svc.StartName)'"
-        $profilePath = Get-ProfilePathFromServiceStartName -StartName $svc.StartName
-        if ($profilePath) {
-            Write-Info "Resolved service profile path: $profilePath"
-        } else {
-            Write-Warn 'Could not resolve service profile path; will attempt current user profile.'
+    if ($mode -in @('SharpHound', 'All')) {
+        $svc = Get-ServiceObject -Name $ServiceName
+        if ($svc) {
+            Write-Info "Using service '$($svc.Name)' (DisplayName: '$($svc.DisplayName)') running as '$($svc.StartName)'"
+            $profilePath = Get-ProfilePathFromServiceStartName -StartName $svc.StartName
+            if ($profilePath) {
+                Write-Info "Resolved service profile path: $profilePath"
+            } else {
+                Write-Warn 'Could not resolve service profile path; will attempt current user profile.'
+            }
         }
     }
 
-    # Parameter-only: set BHE LogLevel and EnumerationLogLevel
-    $desiredLevel = $SetLogLevel
-    $desiredEnumLevel = $SetEnumerationLogLevel
+    if ($mode -eq 'All') {
+        Write-Host "Collecting ALL logs (SharpHound, AzureHound, and Event Logs)..." -ForegroundColor Cyan
+        
+        # SharpHound configuration changes
+        $desiredLevel = $SetLogLevel
+        $desiredEnumLevel = $SetEnumerationLogLevel
+        $didChange = $false
+        if ($desiredLevel) { Set-BHELogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredLevel -StatusList $records; $didChange = $true }
+        if ($desiredEnumLevel) { Set-BHEEnumerationLogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredEnumLevel -StatusList $records; $didChange = $true }
 
-    $didChange = $false
-    if ($desiredLevel) {
-        Set-BHELogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredLevel -StatusList $records
-        $didChange = $true
+        # AzureHound configuration changes
+        if ($PSBoundParameters.ContainsKey('SetAzureVerbosity')) { Set-AzureHoundVerbosity -Verbosity $SetAzureVerbosity -StatusList $records }
+        if ($RestartAzureHound) { Try-RestartAzureHoundService }
+
+        # Event logs
+        Collect-EventLogsWithStatus -DestinationFolder $workDir -StatusList $records
+        
+        # SharpHound files
+        Collect-BHEFilesWithStatus -ServiceProfilePath $profilePath -DestinationFolder $workDir -StatusList $records
+        
+        # AzureHound files
+        Collect-AzureHoundFilesWithStatus -DestinationFolder $workDir -StatusList $records
+        
+    } elseif ($mode -eq 'SharpHound') {
+        # Parameter-only: set BHE LogLevel and EnumerationLogLevel
+        $desiredLevel = $SetLogLevel
+        $desiredEnumLevel = $SetEnumerationLogLevel
+        $didChange = $false
+        if ($desiredLevel) { Set-BHELogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredLevel -StatusList $records; $didChange = $true }
+        if ($desiredEnumLevel) { Set-BHEEnumerationLogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredEnumLevel -StatusList $records; $didChange = $true }
+
+        # Event logs
+        Collect-EventLogsWithStatus -DestinationFolder $workDir -StatusList $records
+        # BHE files
+        Collect-BHEFilesWithStatus -ServiceProfilePath $profilePath -DestinationFolder $workDir -StatusList $records
+    } else {
+        # AzureHound path
+        if ($PSBoundParameters.ContainsKey('SetAzureVerbosity')) { Set-AzureHoundVerbosity -Verbosity $SetAzureVerbosity -StatusList $records }
+        if ($RestartAzureHound) { Try-RestartAzureHoundService }
+        # Event logs
+        Collect-EventLogsWithStatus -DestinationFolder $workDir -StatusList $records
+        # AzureHound files
+        Collect-AzureHoundFilesWithStatus -DestinationFolder $workDir -StatusList $records
     }
-    if ($desiredEnumLevel) {
-        Set-BHEEnumerationLogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredEnumLevel -StatusList $records
-        $didChange = $true
-    }
-
-    # Parameter-only restart (no prompt)
-    if ($didChange -and $RestartDelegatorAfterChange) {
-        Try-RestartDelegatorService -Name $ServiceName
-    }
-
-    # Event logs
-    Collect-EventLogsWithStatus -DestinationFolder $workDir -StatusList $records
-
-    # BHE files
-    Collect-BHEFilesWithStatus -ServiceProfilePath $profilePath -DestinationFolder $workDir -StatusList $records
 
     Write-Host ''
     try { Stop-Transcript | Out-Null } catch { }
@@ -750,15 +1000,15 @@ try {
     Add-Status -List $records -Name 'Zip Archive' -Path $zipPath -Status 'Created'
     Print-ItemResult -Name 'Zip Archive' -Status 'Created'
 
-    Write-Host "\nCollection complete." -ForegroundColor Green
+    Write-Host "Collection complete." -ForegroundColor Green
     Write-Host "Folder: $workDir"
     Write-Host "Zip:    $zipPath"
 
     Print-Summary -StatusList $records -WorkDir $workDir -ZipPath $zipPath
     if ($interactive) { Prompt-Open -WorkDir $workDir -ZipPath $zipPath }
 } catch {
-    Write-Error "Unexpected error: $($_.Exception.Message)"
+    $errorMsg = if ($_ -and $_.Exception) { $_.Exception.Message } else { "Unknown error occurred" }
+    Write-Error "Unexpected error: $errorMsg"
 } finally {
     try { Stop-Transcript | Out-Null } catch { }
 }
-
