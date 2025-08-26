@@ -1,7 +1,7 @@
 
 # BHE Logs Collector 2.0
 Collector tool to get: Windows event logs, BloodHound Enterprise (BHE) SharpHound and/or AzureHound service artifacts into a single zip.  
-Designed for support and troubleshooting, with both interactive and fully non-interactive modes.
+Designed for support and troubleshooting.
 
 ---
 
@@ -258,6 +258,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
