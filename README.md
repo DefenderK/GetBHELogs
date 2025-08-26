@@ -189,7 +189,7 @@ The `-All` parameter is a powerful feature that allows you to collect **all** lo
 * **Consistent output**: All logs are collected at the same timestamp
 * **Complete coverage**: Ensures nothing is missed during collection
 
----
+```
 
 ## Screenshots / Demo Output Example
 
@@ -258,6 +258,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
