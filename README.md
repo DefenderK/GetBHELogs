@@ -1,53 +1,23 @@
 
-# BHE Logs Collector 2.0
-Collector tool to get: Windows event logs, BloodHound Enterprise (BHE) SharpHound and/or AzureHound service artifacts into a single zip.  
+# BHE Logs Collector
+Collector tool to gather: Windows event logs, BloodHound Enterprise (BHE) SharpHound and/or AzureHound service artifacts, and/or a Performance monitor trace into a output zip.  
 Designed for support and troubleshooting.
 
----
-
-## Quick Start
-
-From an **elevated PowerShell prompt** in the script directory:
-
-```powershell
-# Default collection
-.\GetBHESupportLogs.ps1
-
-# Collect all logs (SharpHound + AzureHound + Event Logs) in one run
-.\GetBHESupportLogs.ps1 -All
-
-# Show command line help
-.\GetBHESupportLogs.ps1 -Help
-
-# Collect logs but exclude event logs
-.\GetBHESupportLogs.ps1 -ExcludeEventLogs
-
-# Collect logs but exclude settings.json
-.\GetBHESupportLogs.ps1 -ExcludeSettings
-
-# Collect to a custom folder (default is Desktop)
-.\GetBHESupportLogs.ps1 -OutputRoot "C:\Temp"
-
-# Set log levels for SharpHound and restart service automatically
-.\GetBHESupportLogs.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
-
-
-````
 
 ---
 
 ## What it does
 
 * Exports **Application** and **System** event logs (`.evtx`; falls back to XML if needed).
-* Collects BHE artifacts from the **Delegator service account profile**:
+* Collects BHE artifacts from the **SharpHound service account profile**:
   * `BloodHoundEnterprise/log_archive/`
   * `BloodHoundEnterprise/service.log`
   * `BloodHoundEnterprise/settings.json`
-
-* Creates a **timestamped folder and zip** in the chosen output directory (Desktop by default).
-* Shows per-item status and a final summary.
 * When AzureHound is selected, in addition to the event logs, collects `azurehound.log` from `C:\Program Files\AzureHound Enterprise\azurehound.log` if present.
+* Shows per-item status and a final summary.
+* Creates a **timestamped folder and zip** in the chosen output directory (Desktop by default).
 * When using `-All`, collects **all** logs simultaneously: SharpHound, AzureHound, and Windows event logs.
+* When using `-AllPlusPerf`, it additionally creates a Performance Monitor Data Collector and starts the trace. It collects the output blg file to `C:\PerfLogs`
 
 ---
 
@@ -59,40 +29,32 @@ From an **elevated PowerShell prompt** in the script directory:
 
 ---
 
+## Quick Start
+
+1. **Download** the script to your target system (or git clone)
+2. **Open PowerShell as Administrator**
+3. **Navigate** to the script directory
+4. **Run** the script:
+   ```powershell
+   .\GetBHESupportLogsTool.ps1
+   ```
+5. **Follow prompts** to collect logs
+6. **Review** the generated zip file and folder
+
+For automated collection:
+```powershell
+.\GetBHESupportLogsTool.ps1 -All
+```
+
+---
+
 ## Usage
 
-From an elevated PowerShell prompt in the script directory:
+From an elevated PowerShell prompt in the scripts directory:
 
 ```powershell
 # Run the script directly (defaults to interactive mode)
 .\GetBHESupportLogs.ps1
-```
-
-### Optional parameter examples
-
-```powershell
-# Choose a different output folder
-.\GetBHESupportLogs.ps1 -OutputRoot "C:\Temp"
-
-# Skip event logs or settings.json if customers are sensitive to their contents
-.\GetBHESupportLogs.ps1 -ExcludeEventLogs
-.\GetBHESupportLogs.ps1 -ExcludeSettings
-
-# Set BHE logging levels (validated: Trace, Debug, Information)
-.\GetBHESupportLogs.ps1 -SetLogLevel Debug
-.\GetBHESupportLogs.ps1 -SetEnumerationLogLevel Trace
-
-# Limit log_archive collection to N most recent files (default is to collect all)
-.\GetBHESupportLogs.ps1 -LogArchiveNumber 10
-
-# AzureHound: set verbosity to Trace (2) and restart the service
-.\GetBHESupportLogs.ps1 -SetAzureVerbosity 2 -RestartAzureHound
-
-# AzureHound: revert to default verbosity (0) without restart
-.\GetBHESupportLogs.ps1 -SetAzureVerbosity 0
-
-# Collect all logs with custom output location
-.\GetBHESupportLogs.ps1 -All -OutputRoot "C:\Temp"
 
 ```
 
@@ -100,48 +62,134 @@ From an elevated PowerShell prompt in the script directory:
 
 * Displays an ASCII banner.
 * Prompts: **Press Enter to collect logs, or Q to quit**.
-* Displays ouput log location.
-* Prompts: Select collection target: (S)harpHound or (A)zureHound
+* Displays output log location.
+* Prompts for: Select collection target: (S)harpHound or (A)zureHound
   Choice [S/A]:
 * Displays per-item status as logs and files are collected.
 * Prints a summary and offers: **Press O to open output folder, Z to open at zip, or any other key to exit**.
 * When using `-All`, all logs are collected regardless of interactive target selection.
 
-**Note**: The script is always interactive by default. Use `-All` to collect everything automatically, or run without parameters for selective collection.
+**Note**: The script is interactive by default for selective collection. Use `-All` or `-AllPlusPerf` to collect everything automatically without user input, or run without parameters for selective collection.
+
+### Comprehensive Examples
+
+#### Basic Collection
+```powershell
+# Interactive collection (default)
+.\GetBHESupportLogsTool.ps1
+
+# Automated collection of all logs
+.\GetBHESupportLogsTool.ps1 -All
+
+# Collection with custom output location
+.\GetBHESupportLogsTool.ps1 -OutputRoot "C:\Temp"
+```
+
+#### Configuration Management
+```powershell
+# Set BHE logging levels and restart service
+.\GetBHESupportLogsTool.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
+
+# AzureHound verbosity and restart
+.\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound
+
+# Configuration-only mode (no collection)
+.\GetBHESupportLogsTool.ps1 -SetLogLevel Debug
+```
+
+#### Selective Collection
+```powershell
+# Skip sensitive data
+.\GetBHESupportLogsTool.ps1 -ExcludeEventLogs -ExcludeSettings
+
+# Limit log archive collection
+.\GetBHESupportLogsTool.ps1 -LogArchiveNumber 10
+
+# Performance monitoring only
+.\GetBHESupportLogsTool.ps1 -GetBHEPerfmon
+```
+
+#### Help & Information
+```powershell
+# Display help and exit
+.\GetBHESupportLogsTool.ps1 -Help
+```
 
 ### Configuration-only mode
-
-* When using **only** configuration/service parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegatorAfterChange`, `-SetAzureVerbosity`, `-RestartAzureHound`), the script skips the collection options entirely.
+* When using **only** configuration/service parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegator`, `-SetAzureVerbosity`, `-RestartAzureHound`), the script skips the collection options entirely.
 * Only makes the requested changes and shows verification of what was updated.
 * Useful for troubleshooting when you need to change settings but don't want to collect logs yet.
 * Example: `.\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound` will only change verbosity and restart the service.
 
-⚠️ **Note**: Log level changes and service restarts are controlled **only** via parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegatorAfterChange`).
+⚠️ **Note**: Log level changes and service restarts are controlled **only** via parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegator`,`-RestartAzureHound`).
 
 ---
 
-## All parameters
+## All Parameters
 
+### Collection Control
 * `-OutputRoot [string]` — Root folder where the output directory and zip are created. Defaults to Desktop.
-* `-All [switch]` — Collect all logs: SharpHound, AzureHound, and Windows event logs simultaneously.
-* `-Help [switch]` — Display command line parameters and examples, then exit.
+* `-All [switch]` — Collect all logs: SharpHound, AzureHound, and Windows event logs simultaneously. **Automated execution - no user input required.**
+* `-AllPlusPerf [switch]` — Do everything `-All` does and also ensure a BHE perfmon trace is set up. **Automated execution - no user input required.**
+* `-LogArchiveNumber [int]` — Copy only the N most recent files from the log_archive folder.
+
+### Exclusion Options
 * `-ExcludeEventLogs [switch]` — Skip exporting Windows Application/System event logs.
 * `-ExcludeSettings [switch]` — Skip copying `settings.json` from the BHE folder.
+
+### SharpHound Configuration Management
 * `-SetLogLevel [Trace|Debug|Information]` — Update LogLevel in `settings.json` before collection.
 * `-SetEnumerationLogLevel [Trace|Debug|Information]` — Update EnumerationLogLevel in `settings.json`.
 * `-RestartDelegator [switch]` — Automatically restart the Delegator service (useful after log level changes).
-* `-LogArchiveNumber [int]` — Copy only the N most recent files from the log_archive folder.
+
+### AzureHound Configuration Management
 * `-SetAzureVerbosity [0|1|2]` — Set AzureHound service log verbosity in `C:\ProgramData\azurehound\config.json` (0=Default, 1=Debug, 2=Trace).
 * `-RestartAzureHound [switch]` — Restart the `AzureHound` Windows service.
+
+### Performance Monitoring
+* `-GetBHEPerfmon [switch]` — Perfmon-only mode. If the collector is running, you'll be prompted to stop it and then the logs in `C:\PerfLogs\BloodHound_System_Overview_Lite` are zipped to Desktop as `<COMPUTERNAME>_PerfTrace.zip`. If it isn't present, the collector is created and started with recommended counters.
+* `-DeleteBHEPerfmon [switch]` — Stop and delete the perfmon collector and remove performance output logs from the directory.
+
+### Utility
+* `-Help [switch]` — Display command line parameters and examples, then exit.
+
+
+---
+
+## Performance Monitor tracing
+
+The script can manage a lightweight performance trace using Windows `logman`:
+
+- Collector name: `BloodHound_System_Overview_Lite`
+- Location: `C:\PerfLogs\BloodHound_System_Overview_Lite`
+- Format: binary circular log (`bincirc`), 512 MB max, 30s sample interval
+- Counters included: `"\Process(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Memory\*" "\Network Interface(*)\*" "\System\System Up Time"`
+
+### Typical flows
+
+- Start or check the collector, and if already running choose to stop and zip:
+  ```powershell
+  .\GetBHESupportLogs.ps1 -GetBHEPerfmon
+  # If running: press Y to stop and zip to Desktop as <COMPUTERNAME>_PerfTrace.zip
+  # Press Q to leave it running; any other key cancels
+  ```
+
+- Collect all logs and also ensure perfmon is set up (automated execution, does not stop/zip automatically):
+  ```powershell
+  .\GetBHESupportLogs.ps1 -AllPlusPerf
+  # Runs automatically without user input
+  # Later, run -GetBHEPerfmon and choose Y to stop and zip
+  ```
+
+- Delete the collector and performon output files:
+  ```powershell
+  .\GetBHESupportLogs.ps1 -DeleteBHEPerfmon
+  ```
 
 ---
 
 ## Notes
 
-* Service resolution tries matching in this order:
-  Name (`SHDelegator`), DisplayName (`SharpHoundDelegator`), Description (`SharpHound Delegation Service`).
-* If not found, BHE file collection may show as *NotFound*.
-* AzureHound service name and display name: `AzureHound`. Description: "The official tool for collecting Azure data for BloodHound and BloodHound Enterprise." Configuration file path: `C:\ProgramData\azurehound\config.json` (`verbosity` set to 0, 1, or 2).
 * **Privacy:** Event logs may contain PII; `settings.json` may contain endpoints or config.
   Use `-ExcludeEventLogs` and/or `-ExcludeSettings` if needed.
 
@@ -151,6 +199,7 @@ From an elevated PowerShell prompt in the script directory:
 
 * Folder: `BHE_SupportLogs_YYYYMMDD_HHMMSS`
 * Zip: `BHE_SupportLogs_YYYYMMDD_HHMMSS.zip`
+* Perf Zip: `<COMPUTERNAME>_PerfTrace.zip`
 * Tool Collector Transcript: `collectorlogs.log` inside the folder
 
 ---
@@ -162,38 +211,14 @@ From an elevated PowerShell prompt in the script directory:
 
 ---
 
-## The `-All` Parameter
 
-The `-All` parameter is a quick and easy feature that allows you to collect **all** logs in a single run:
+## Demo Output Example
 
-* **SharpHound logs**: service.log, settings.json, log_archive folder contents
-* **AzureHound logs**: azurehound.log  
-* **Windows Event Logs**: Application and System logs
-
-### Examples:
-
-```powershell
-# Collect everything in one command
-.\GetBHESupportLogs.ps1 -All
-
-# Collect all logs to a specific location
-.\GetBHESupportLogs.ps1 -All -OutputRoot "C:\Logs"
-
-### Benefits:
-
-* **Single command**: No need to run multiple collection cycles
-* **Consistent output**: All logs are collected at the same timestamp
-* **Complete coverage**: Ensures nothing is missed during collection
-
-```
-
-## Screenshots / Demo Output Example
-
-### Startup
+### Startup (Standard Mode)
 
 ```
 ========================================
-        BHE Logs Collector v.2.0       
+        BHE Logs Collector v.2.9       
 ========================================
 WARNING: This collection will include the below data!
 -------> Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.
@@ -240,6 +265,8 @@ Zip archive:  C:\Users\AdminUser\Desktop\BHE_SupportLogs_20250821_092237.zip
 Press O to open output folder, Z to open at zip, or any other key to exit.
 Choice: 
 ```
+
+---
 
 ---
 
