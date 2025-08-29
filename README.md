@@ -17,7 +17,7 @@ Designed for support and troubleshooting.
 * Shows per-item status and a final summary.
 * Creates a **timestamped folder and zip** in the chosen output directory (Desktop by default).
 * When using `-All`, collects **all** logs simultaneously: SharpHound, AzureHound, and Windows event logs.
-* When using `-AllPlusPerf`, it additionally creates a Performance Monitor Data Collector Set and starts the trace. It collects the output blg file to `C:\PerfLogs`
+* When using `-AllPlusPerf`, it additionally creates a Performance Monitor Data Collector Set and starts the trace. It creates the output blg file in `C:\PerfLogs`
 
 ---
 
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
