@@ -17,7 +17,7 @@ Designed for support and troubleshooting.
 * Shows per-item status and a final summary.
 * Creates a **timestamped folder and zip** in the chosen output directory (Desktop by default).
 * When using `-All`, collects **all** logs simultaneously: SharpHound, AzureHound, and Windows event logs.
-* When using `-AllPlusPerf`, it additionally creates a Performance Monitor Data Collector and starts the trace. It collects the output blg file to `C:\PerfLogs`
+* When using `-AllPlusPerf`, it additionally creates a Performance Monitor Data Collector Set and starts the trace. It collects the output blg file to `C:\PerfLogs`
 
 ---
 
@@ -147,8 +147,8 @@ From an elevated PowerShell prompt in the scripts directory:
 * `-RestartAzureHound [switch]` — Restart the `AzureHound` Windows service.
 
 ### Performance Monitoring
-* `-GetBHEPerfmon [switch]` — Perfmon-only mode. If the collector is running, you'll be prompted to stop it and then the logs in `C:\PerfLogs\BloodHound_System_Overview_Lite` are zipped to Desktop as `<COMPUTERNAME>_PerfTrace.zip`. If it isn't present, the collector is created and started with recommended counters.
-* `-DeleteBHEPerfmon [switch]` — Stop and delete the perfmon collector and remove performance output logs from the directory.
+* `-GetBHEPerfmon [switch]` — Perfmon-only mode. If the Data Collector Set is running, you'll be prompted to stop it and then the logs in `C:\PerfLogs\BloodHound_System_Overview_Lite` are zipped to Desktop as `<COMPUTERNAME>_PerfTrace.zip`. If it isn't present, the Data Collector Set is created and started with recommended counters.
+* `-DeleteBHEPerfmon [switch]` — Stop and delete the Data Collector Set.
 
 ### Utility
 * `-Help [switch]` — Display command line parameters and examples, then exit.
@@ -160,11 +160,11 @@ From an elevated PowerShell prompt in the scripts directory:
 
 The script can manage a lightweight performance monitor trace using Windows `logman`:
 
-- Collector name: `BloodHound_System_Overview_Lite`
+- Data Collector Set name: `BloodHound_System_Overview_Lite`
 - Location: `C:\PerfLogs\BloodHound_System_Overview_Lite`
 - Format: binary circular log (`bincirc`), 512 MB max, 30s sample interval
 - Counters included: `"\Process(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Memory\*" "\Network Interface(*)\*" "\System\System Up Time"`
-- Note: You can also run `logman query` to check if the Data Collector is already setup and running, example output below:
+- Note: You can also run `logman query` to check if the Data Collector Set is already setup and trace is running, example output below:
   ```
   PS C:\Users\administrator.DEFENDERK\Desktop> logman query
 
@@ -175,21 +175,21 @@ The script can manage a lightweight performance monitor trace using Windows `log
 
 ### Typical flows
 
-- Start or check the collector, and if already running choose to stop and zip:
+- Start or check the Data Collector Set, and if the trace already running choose to stop and zip:
   ```powershell
   .\GetBHESupportLogsTool.ps1 -GetBHEPerfmon
   # If running: press Y to stop and zip to Desktop as <COMPUTERNAME>_PerfTrace.zip
   # Press Q to leave it running; any other key cancels
   ```
 
-- Collect all logs and also ensure perfmon is set up (automated execution, does not stop/zip automatically):
+- Collect all logs and also ensure the Data Collector Set is set up (automated execution, does not stop/zip automatically):
   ```powershell
   .\GetBHESupportLogsTool.ps1 -AllPlusPerf
   # Runs automatically without user input
   # Later, run -GetBHEPerfmon and choose Y to stop and zip
   ```
 
-- Delete the collector and performance output files:
+- Delete the Data Collector Set:
   ```powershell
   .\GetBHESupportLogsTool.ps1 -DeleteBHEPerfmon
   ```
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
