@@ -189,7 +189,7 @@ The script can manage a lightweight performance monitor trace using Windows `log
   # Later, run -GetBHEPerfmon and choose Y to stop and zip
   ```
 
-- Delete the collector and performonce output files:
+- Delete the collector and performance output files:
   ```powershell
   .\GetBHESupportLogsTool.ps1 -DeleteBHEPerfmon
   ```
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
