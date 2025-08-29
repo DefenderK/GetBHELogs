@@ -22,26 +22,26 @@
 
 
 .EXAMPLE
-    .\GetBHESupportLogs.ps1
+    .\GetBHESupportLogsTool.ps1
 
 .EXAMPLE
-    .\GetBHESupportLogs.ps1 -OutputRoot "C:\Temp"
+    .\GetBHESupportLogsTool.ps1 -OutputRoot "C:\Temp"
 
 .EXAMPLE
     # Collect all logs (SharpHound, AzureHound, and event logs)
-    .\GetBHESupportLogs.ps1 -All
+    .\GetBHESupportLogsTool.ps1 -All
 
 .EXAMPLE
     # Set log levels via parameters and restart service explicitly
-    .\GetBHESupportLogs.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
+    .\GetBHESupportLogsTool.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
 
 .EXAMPLE
     # Collect with exclusions and limit log_archive files
-    .\GetBHESupportLogs.ps1 -ExcludeEventLogs -ExcludeSettings -LogArchiveNumber 5
+    .\GetBHESupportLogsTool.ps1 -ExcludeEventLogs -ExcludeSettings -LogArchiveNumber 5
 
 .EXAMPLE
     # Show command line help
-    .\GetBHESupportLogs.ps1 -Help
+    .\GetBHESupportLogsTool.ps1 -Help
 
 .NOTES
     - Windows PowerShell 5.1+ is supported (PowerShell 7+ also works)
@@ -1245,4 +1245,5 @@ try {
 } finally {
     try { Stop-Transcript | Out-Null } catch { }
 }
+
 
