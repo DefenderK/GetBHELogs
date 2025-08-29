@@ -87,19 +87,16 @@ From an elevated PowerShell prompt in the scripts directory:
 
 #### Configuration Management
 ```powershell
-# Set BHE logging levels and restart service
+# Set SharpHound logging levels and restart service
 .\GetBHESupportLogsTool.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator
 
-# AzureHound verbosity and restart
+# Set AzureHound verbosity and restart
 .\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound
-
-# Configuration-only mode (no collection)
-.\GetBHESupportLogsTool.ps1 -SetLogLevel Debug
 ```
 
 #### Selective Collection
 ```powershell
-# Skip sensitive data
+# Skip Event Logs and settings.json
 .\GetBHESupportLogsTool.ps1 -ExcludeEventLogs -ExcludeSettings
 
 # Limit log archive collection
@@ -111,7 +108,7 @@ From an elevated PowerShell prompt in the scripts directory:
 
 #### Help & Information
 ```powershell
-# Display help and exit
+# Display help
 .\GetBHESupportLogsTool.ps1 -Help
 ```
 
@@ -121,7 +118,7 @@ From an elevated PowerShell prompt in the scripts directory:
 * Useful for troubleshooting when you need to change settings but don't want to collect logs yet.
 * Example: `.\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound` will only change verbosity and restart the service.
 
-⚠️ **Note**: Log level changes and service restarts are controlled **only** via parameters (`-SetLogLevel`, `-SetEnumerationLogLevel`, `-RestartDelegator`,`-RestartAzureHound`).
+⚠️ **Note**: Log level changes and service restarts are controlled **only** via parameters.
 
 ---
 
@@ -144,10 +141,10 @@ From an elevated PowerShell prompt in the scripts directory:
 
 ### AzureHound Configuration Management
 * `-SetAzureVerbosity [0|1|2]` — Set AzureHound service log verbosity in `C:\ProgramData\azurehound\config.json` (0=Default, 1=Debug, 2=Trace).
-* `-RestartAzureHound [switch]` — Restart the `AzureHound` Windows service.
+* `-RestartAzureHound [switch]` — Restart the `AzureHound` Windows service (useful after log level changes).
 
 ### Performance Monitoring
-* `-GetBHEPerfmon [switch]` — Perfmon-only mode. If the Data Collector Set is running, you'll be prompted to stop it and then the logs in `C:\PerfLogs\BloodHound_System_Overview_Lite` are zipped to Desktop as `<COMPUTERNAME>_PerfTrace.zip`. If it isn't present, the Data Collector Set is created and started with recommended counters.
+* `-GetBHEPerfmon [switch]` — Perfmon-only mode. If the Data Collector Set is running, you'll be prompted to stop it and then the trace files in `C:\PerfLogs` are zipped to Desktop as `<COMPUTERNAME>_PerfTrace.zip`. If it isn't present, the Data Collector Set is created and started with recommended counters.
 * `-DeleteBHEPerfmon [switch]` — Stop and delete the Data Collector Set.
 
 ### Utility
@@ -161,7 +158,7 @@ From an elevated PowerShell prompt in the scripts directory:
 The script can manage a lightweight performance monitor trace using Windows `logman`:
 
 - Data Collector Set name: `BloodHound_System_Overview_Lite`
-- Location: `C:\PerfLogs\BloodHound_System_Overview_Lite`
+- Location: `C:\PerfLogs`
 - Format: binary circular log (`bincirc`), 512 MB max, 30s sample interval
 - Counters included: `"\Process(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Memory\*" "\Network Interface(*)\*" "\System\System Up Time"`
 - Note: You can also run `logman query` to check if the Data Collector Set is already setup and trace is running, example output below:
@@ -175,7 +172,7 @@ The script can manage a lightweight performance monitor trace using Windows `log
 
 ### Typical flows
 
-- Start or check the Data Collector Set, and if the trace already running choose to stop and zip:
+- Start or check the Data Collector Set, and if the trace is already running choose to stop and zip:
   ```powershell
   .\GetBHESupportLogsTool.ps1 -GetBHEPerfmon
   # If running: press Y to stop and zip to Desktop as <COMPUTERNAME>_PerfTrace.zip
@@ -289,6 +286,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
