@@ -1,6 +1,6 @@
 
 # BHE Logs Collector
-Collector tool to gather: Windows event logs, BloodHound Enterprise (BHE) SharpHound and/or AzureHound service artifacts, and/or a Performance monitor trace into a output zip.  
+Collector tool to gather: Windows event logs, BloodHound Enterprise (BHE) SharpHound and/or AzureHound service artifacts, and/or a Performance monitor trace into an output zip.  
 Designed for support and troubleshooting.
 
 
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
