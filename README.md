@@ -71,7 +71,7 @@ From an elevated PowerShell prompt in the scripts directory:
 
 **Note**: The script is interactive by default for selective collection. Use `-All` or `-AllPlusPerf` to collect everything automatically without user input, or run without parameters for selective collection.
 
-### Comprehensive Examples
+### Examples
 
 #### Basic Collection
 ```powershell
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
