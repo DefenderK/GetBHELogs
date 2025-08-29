@@ -54,7 +54,7 @@ From an elevated PowerShell prompt in the scripts directory:
 
 ```powershell
 # Run the script directly (defaults to interactive mode)
-.\GetBHESupportLogs.ps1
+.\GetBHESupportLogsTool.ps1
 
 ```
 
@@ -177,21 +177,21 @@ The script can manage a lightweight performance monitor trace using Windows `log
 
 - Start or check the collector, and if already running choose to stop and zip:
   ```powershell
-  .\GetBHESupportLogs.ps1 -GetBHEPerfmon
+  .\GetBHESupportLogsTool.ps1 -GetBHEPerfmon
   # If running: press Y to stop and zip to Desktop as <COMPUTERNAME>_PerfTrace.zip
   # Press Q to leave it running; any other key cancels
   ```
 
 - Collect all logs and also ensure perfmon is set up (automated execution, does not stop/zip automatically):
   ```powershell
-  .\GetBHESupportLogs.ps1 -AllPlusPerf
+  .\GetBHESupportLogsTool.ps1 -AllPlusPerf
   # Runs automatically without user input
   # Later, run -GetBHEPerfmon and choose Y to stop and zip
   ```
 
-- Delete the collector and performon output files:
+- Delete the collector and performonce output files:
   ```powershell
-  .\GetBHESupportLogs.ps1 -DeleteBHEPerfmon
+  .\GetBHESupportLogsTool.ps1 -DeleteBHEPerfmon
   ```
 
 ---
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
