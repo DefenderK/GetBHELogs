@@ -164,7 +164,7 @@ The script can manage a lightweight performance monitor trace using Windows `log
 - Location: `C:\PerfLogs\BloodHound_System_Overview_Lite`
 - Format: binary circular log (`bincirc`), 512 MB max, 30s sample interval
 - Counters included: `"\Process(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Memory\*" "\Network Interface(*)\*" "\System\System Up Time"`
-- Note: You can also run `logman query` to check if the Data Collector is setup and running, example output below:
+- Note: You can also run `logman query` to check if the Data Collector is already setup and running, example output below:
   ```
   PS C:\Users\administrator.DEFENDERK\Desktop> logman query
 
@@ -289,6 +289,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
