@@ -34,12 +34,16 @@ Designed for support and troubleshooting.
 1. **Download** the script to your target system (or git clone)
 2. **Open PowerShell as Administrator**
 3. **Navigate** to the script directory
-4. **Run** the script:
+4. **Unblock the file** (required for downloaded scripts):
+   ```powershell
+   Unblock-File -Path ".\GetBHESupportLogsTool.ps1"
+   ```
+5. **Run** the script:
    ```powershell
    .\GetBHESupportLogsTool.ps1
    ```
-5. **Follow prompts** to collect logs
-6. **Review** the generated zip file and folder
+6. **Follow prompts** to collect logs
+7. **Review** the generated zip file and folder
 
 For automated collection:
 ```powershell
@@ -286,6 +290,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
