@@ -50,6 +50,16 @@ For automated collection:
 .\GetBHESupportLogsTool.ps1 -All
 ```
 
+### Alternative: Execution Policy
+
+If you continue to have issues, you may need to adjust the PowerShell execution policy:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Note**: This is a security setting change. Only use if the Unblock-File method doesn't work.
+
 ---
 
 ## Usage
@@ -290,6 +300,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
