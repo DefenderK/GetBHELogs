@@ -14,27 +14,18 @@
     parameter. When using -All, all logs are collected regardless of interactive
     target selection.
 
-    NOTE: Log level changes (LogLevel and EnumerationLogLevel) and service restarts
+    Additionally, the tool can collect a Performance Monitor trace and zip the output.
+
+    NOTE: Log level changes (e.g., LogLevel and EnumerationLogLevel) and service restarts
     are controlled only via command-line parameters; there are no interactive prompts
     for these settings.
 
-.PARAMETER OutputRoot
-    Root directory where the output folder and zip will be created. Defaults to the
-    current user's Desktop.
-
-.PARAMETER All
-    Collect all logs: SharpHound, AzureHound, and Windows event logs. When used,
-    the script will collect everything regardless of the interactive target selection.
-
-.PARAMETER Help
-    Display command line parameters and examples. When used, the script shows help
-    and exits without collecting logs or making changes.
 
 .EXAMPLE
     .\GetBHESupportLogs.ps1
 
 .EXAMPLE
-    .\GetBHESupportLogs.ps1 -OutputRoot C:\Temp
+    .\GetBHESupportLogs.ps1 -OutputRoot "C:\Temp"
 
 .EXAMPLE
     # Collect all logs (SharpHound, AzureHound, and event logs)
@@ -55,13 +46,12 @@
 .NOTES
     - Windows PowerShell 5.1+ is supported (PowerShell 7+ also works)
     - Run as Administrator for best results (event log export and profile access)
-    - If the SHDelegator service is not present, BHE files may not be found
     - No interactive prompts are shown for log levels or service restart
+    - See README.md for more information
 #>
 [CmdletBinding()]
 param(
     [string]$OutputRoot = "$env:USERPROFILE\Desktop",
-    [string]$ServiceName = "SHDelegator",
     [switch]$ExcludeEventLogs,
     [switch]$ExcludeSettings,
     [ValidateSet('Trace','Debug','Information')]
@@ -74,6 +64,9 @@ param(
     [int]$SetAzureVerbosity,
     [switch]$RestartAzureHound,
     [switch]$All,
+    [switch]$AllPlusPerf,
+    [switch]$GetBHEPerfmon,
+    [switch]$DeleteBHEPerfmon,
     [switch]$Help
 )
 
@@ -92,7 +85,7 @@ function Write-Warn {
 
 # Simple ASCII banner and UI helpers
 function Show-Banner {
-    $label = 'BHE Logs Collector v.2.0'
+    $label = 'BHE Logs Collector v.2.9'
     $width = [Math]::Max($label.Length + 8, 40)
     $border = ('=' * $width)
     $padLeft = [int][Math]::Floor(($width - $label.Length) / 2)
@@ -146,22 +139,28 @@ function Wait-ForEnter {
 
 function Show-CommandLineHelp {
     Write-Host ""; Write-Host "Command Line Parameters:" -ForegroundColor Cyan
-    Write-Host "  -Help                        Show this help information" -ForegroundColor White
-    Write-Host "  -OutputRoot [path]           Output folder (default: Desktop)" -ForegroundColor White
-    Write-Host "  -All                         Collect all SharpHound, AzureHound, and event logs" -ForegroundColor White
-    Write-Host "  -ExcludeEventLogs            Skip Windows event logs" -ForegroundColor White
-    Write-Host "  -ExcludeSettings             Skip settings.json" -ForegroundColor White
-    Write-Host "  -SetLogLevel [level]         Set LogLevel (Trace|Debug|Information)" -ForegroundColor White
-    Write-Host "  -SetEnumerationLogLevel [l]  Set EnumerationLogLevel (Trace|Debug|Information)" -ForegroundColor White
-    Write-Host "  -RestartDelegator            Restart SHDelegator service without changing settings" -ForegroundColor White
-    Write-Host "  -LogArchiveNumber [int]      Copy only N most recent files from log_archive" -ForegroundColor White
-    Write-Host "  -SetAzureVerbosity [0|1|2]   Set AzureHound verbosity (0=Default,1=Debug,2=Trace)" -ForegroundColor White
-    Write-Host "  -RestartAzureHound           Restart AzureHound service (with or without -SetAzureVerbosity)" -ForegroundColor White
+    Write-Host "  -Help                            Show this help information" -ForegroundColor White
+    Write-Host "  -OutputRoot [path]               Output folder (default: Desktop)" -ForegroundColor White
+    Write-Host "  -All                             Collect all SharpHound, AzureHound, and event logs" -ForegroundColor White
+    Write-Host "  -AllPlusPerf                     Do -All plus set up perf tracing" -ForegroundColor White
+    Write-Host "  -GetBHEPerfmon                   Only set up/start BHE perfmon trace" -ForegroundColor White
+    Write-Host "  -DeleteBHEPerfmon                Delete the BHE perfmon collector and logs" -ForegroundColor White
+    Write-Host "  -ExcludeEventLogs                Skip Windows event logs" -ForegroundColor White
+    Write-Host "  -ExcludeSettings                 Skip settings.json" -ForegroundColor White
+    Write-Host "  -SetLogLevel [level]             Set LogLevel (Trace|Debug|Information)" -ForegroundColor White
+    Write-Host "  -SetEnumerationLogLevel [level]  Set EnumerationLogLevel (Trace|Debug|Information)" -ForegroundColor White
+    Write-Host "  -RestartDelegator                Restart SHDelegator service without changing settings" -ForegroundColor White
+    Write-Host "  -LogArchiveNumber [int]          Copy only N most recent files from log_archive" -ForegroundColor White
+    Write-Host "  -SetAzureVerbosity [0|1|2]       Set AzureHound verbosity (0=Default,1=Debug,2=Trace)" -ForegroundColor White
+    Write-Host "  -RestartAzureHound               Restart AzureHound service (with or without -SetAzureVerbosity)" -ForegroundColor White
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Cyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -Help" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -OutputRoot C:\Temp" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -All" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -AllPlusPerf" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -GetBHEPerfmon" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -DeleteBHEPerfmon" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -SetLogLevel Debug -SetEnumerationLogLevel Trace -RestartDelegator" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -ExcludeEventLogs -ExcludeSettings" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -LogArchiveNumber 10" -ForegroundColor DarkCyan
@@ -300,8 +299,8 @@ function Collect-BHEFilesWithStatus {
 
             if ($script:LogArchiveNumber -and $script:LogArchiveNumber -gt 0) {
                 # Copy only the most recent N files
-                $allFiles = Get-ChildItem -LiteralPath $logArchiveSrc -File | Sort-Object CreationTime -Descending
-                $filesToCopy = $allFiles | Select-Object -First $script:LogArchiveNumber
+                $allFiles = @(Get-ChildItem -LiteralPath $logArchiveSrc -File | Sort-Object CreationTime -Descending)
+                $filesToCopy = @($allFiles | Select-Object -First $script:LogArchiveNumber)
                 foreach ($file in $filesToCopy) {
                     Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $logArchiveDest $file.Name) -Force -ErrorAction Stop
                 }
@@ -788,6 +787,214 @@ function Try-RestartAzureHoundService {
     }
 }
 
+# ========================
+# Perfmon Collector Section
+# ========================
+function Setup-BHEPerfmon {
+    param (
+        [switch]$Delete
+    )
+
+    $collectorName = "BloodHound_System_Overview_Lite"
+    $logPath = "C:\PerfLogs\$collectorName"
+    $desktop = [Environment]::GetFolderPath("Desktop")
+    $zipPath = Join-Path $desktop "${env:COMPUTERNAME}_PerfTrace.zip"
+
+    if ($Delete) {
+        Write-Host "Deleting collector $collectorName..."
+        
+        # Stop the collector if it's running
+        $stopResult = & logman.exe stop $collectorName 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Collector stopped successfully."
+        } else {
+            Write-Host "Collector was not running or already stopped."
+        }
+        
+        # Wait a moment for the stop to complete
+        Start-Sleep -Seconds 1
+        
+        # Delete the collector
+        $deleteResult = & logman.exe delete $collectorName 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Collector deleted successfully."
+        } else {
+            Write-Host "Failed to delete collector: $deleteResult" -ForegroundColor Yellow
+        }
+        
+        # Verify deletion
+        $null = & logman.exe query $collectorName 2>$null
+        $deleted = ($LASTEXITCODE -ne 0)
+        
+        # Remove log directory
+        if (Test-Path -LiteralPath $logPath) {
+            try {
+                Remove-Item -LiteralPath $logPath -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "Log directory removed."
+            } catch {
+                Write-Host "Could not remove log directory: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+        
+        if ($deleted) {
+            Write-Host "Collector deletion completed successfully." -ForegroundColor Green
+        } else {
+            Write-Host "Collector may still exist (insufficient rights or in-use)." -ForegroundColor Yellow
+        }
+        return
+    }
+
+    # Ensure base log directory exists
+    if (-not (Test-Path -LiteralPath (Split-Path $logPath -Parent))) {
+        New-Item -ItemType Directory -Path (Split-Path $logPath -Parent) -Force | Out-Null
+    }
+
+    # Check if collector exists via exit code
+    $null = & logman.exe query $collectorName 2>$null
+    $collectorExists = ($LASTEXITCODE -eq 0)
+    $didStop = $false
+
+    if ($collectorExists) {
+        $statusOut = (& logman.exe query $collectorName 2>$null) | Out-String
+        if ($statusOut -match "Status\s*:\s*Running") {
+            $choice = Read-Host "$collectorName is already running. Stop it? (Y to stop / Q to leave running and exit)"
+            switch ($choice.ToUpper()) {
+                "Y" { & logman.exe stop $collectorName 2>$null | Out-Null; Write-Host "Stopped collector."; $didStop = $true }
+                "Q" { Write-Host "Leaving collector running."; return }
+                default { Write-Host "Cancelled."; return }
+            }
+        } else {
+            Write-Host "$collectorName exists but is not running. Starting it..."
+            $startResult = & logman.exe start $collectorName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Failed to start collector: $startResult" -ForegroundColor Red
+                return
+            }
+            
+            # Verify the collector actually started
+            Start-Sleep -Seconds 2
+            $verifyResult = & logman.exe query $collectorName 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $statusOut = $verifyResult | Out-String
+                if ($statusOut -match "Status\s*:\s*Running") {
+                    Write-Host "Collector $collectorName started and is running successfully." -ForegroundColor Green
+                } else {
+                    Write-Host "Collector failed to start properly. Status: $statusOut" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "Failed to verify collector status: $verifyResult" -ForegroundColor Red
+            }
+        }
+    } else {
+        Write-Host "Creating new collector $collectorName..."
+        
+        # Use logman command with all counters in one call (sample interval 30 seconds, max 512MB - can be changed here if needed)
+        Write-Host "Creating collector with command: logman.exe create counter $collectorName -f bincirc -c `"\Process(*)\*`" `"\PhysicalDisk(*)\*`" `"\Processor(*)\*`" `"\Memory\*`" `"\Network Interface(*)\*`" `"\System\System Up Time`" -si 00:00:30 -max 512 -o $logPath -v mmddhhmm"
+        $createResult = & logman.exe create counter $collectorName -f bincirc -c "\Process(*)\*" "\PhysicalDisk(*)\*" "\Processor(*)\*" "\Memory\*" "\Network Interface(*)\*" "\System\System Up Time" -si 00:00:30 -max 512 -o $logPath -v mmddhhmm 2>&1
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to create collector: $createResult" -ForegroundColor Red
+            return
+        }
+        
+        Write-Host "Collector created successfully. Starting collection..."
+        
+        # Verify the collector was created with counters
+        Write-Host "Verifying collector configuration..."
+        $configResult = & logman.exe query $collectorName 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $configOut = $configResult | Out-String
+            Write-Host "Collector configuration verified."
+        } else {
+            Write-Host "Warning: Could not verify collector configuration: $configResult" -ForegroundColor Yellow
+        }
+        
+        # Start the collector
+        $startResult = & logman.exe start $collectorName 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to start collector: $startResult" -ForegroundColor Red
+            return
+        }
+        
+        # Verify the collector is actually running
+        Start-Sleep -Seconds 2
+        $verifyResult = & logman.exe query $collectorName 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $statusOut = $verifyResult | Out-String
+            if ($statusOut -match "Status\s*:\s*Running") {
+                Write-Host "Collector $collectorName started and is running successfully." -ForegroundColor Green
+            } else {
+                Write-Host "Collector created but failed to start properly. Status: $statusOut" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "Failed to verify collector status: $verifyResult" -ForegroundColor Red
+        }
+    }
+
+    # Zip logs to Desktop only if we stopped the collector in this run
+    if ($didStop) {
+        try {
+            Add-Type -AssemblyName 'System.IO.Compression.FileSystem' -ErrorAction SilentlyContinue
+            if (Test-Path $zipPath) { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
+            $itemsToZip = @()
+            
+            # Add the log directory itself if it exists
+            if (Test-Path -LiteralPath $logPath) { 
+                $itemsToZip += $logPath 
+                Write-Host "Added log directory to zip: $logPath"
+            }
+            
+            # Look for .blg files that start with the collector name in the parent PerfLogs directory
+            $parentLogPath = Split-Path $logPath -Parent  # This will be C:\PerfLogs
+            $blgPattern = Join-Path $parentLogPath "$collectorName*.blg"
+            Write-Host "Looking for .blg files with pattern: $blgPattern"
+            
+            $blgFiles = @(Get-ChildItem -Path $blgPattern -File -ErrorAction SilentlyContinue)
+            
+            if ($blgFiles -and $blgFiles.Count -gt 0) { 
+                foreach ($file in $blgFiles) {
+                    $itemsToZip += $file.FullName
+                    Write-Host "Added .blg file to zip: $($file.Name)"
+                }
+                Write-Host "Found $($blgFiles.Count) performance log files to zip."
+            } else {
+                Write-Host "No .blg files found with pattern: $blgPattern" -ForegroundColor Yellow
+                # Fallback: list all files in the parent PerfLogs directory to help debug
+                $allFiles = @(Get-ChildItem -Path $parentLogPath -File -ErrorAction SilentlyContinue)
+                if ($allFiles -and $allFiles.Count -gt 0) {
+                    Write-Host "Files found in parent log directory ($parentLogPath):"
+                    foreach ($file in $allFiles) {
+                        Write-Host "  $($file.Name)"
+                    }
+                }
+            }
+            
+            if ($itemsToZip.Count -gt 0) {
+                Write-Host "Creating zip file..."
+                $tmpZipFolder = Join-Path $env:TEMP ("bhe_perf_zip_" + [guid]::NewGuid())
+                New-Item -ItemType Directory -Path $tmpZipFolder -Force | Out-Null
+                
+                foreach ($p in $itemsToZip) {
+                    if (Test-Path -LiteralPath $p) {
+                        Copy-Item -LiteralPath $p -Destination $tmpZipFolder -Recurse -Force -ErrorAction SilentlyContinue
+                        Write-Host "Copied: $p"
+                    } else {
+                        Write-Host "Warning: Path not found: $p" -ForegroundColor Yellow
+                    }
+                }
+                
+                [System.IO.Compression.ZipFile]::CreateFromDirectory($tmpZipFolder, $zipPath)
+                Remove-Item -LiteralPath $tmpZipFolder -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "Zipped perf logs to $zipPath" -ForegroundColor Green
+            } else {
+                Write-Host "No perf log files found to zip." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "Failed to zip perf logs: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+}
+
 $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $workDir = Join-Path $OutputRoot "BHE_SupportLogs_$timestamp"
 $zipPath = Join-Path $OutputRoot "BHE_SupportLogs_$timestamp.zip"
@@ -804,6 +1011,16 @@ if ($Help.IsPresent) {
     return
 }
 
+# Early handlers for perf-only switches
+if ($GetBHEPerfmon.IsPresent) {
+    Setup-BHEPerfmon
+    return
+}
+if ($DeleteBHEPerfmon.IsPresent) {
+    Setup-BHEPerfmon -Delete
+    return
+}
+
 # Determine early whether this is a configuration-only invocation (no collection)
 $__configOnlyParams = @('SetLogLevel', 'SetEnumerationLogLevel', 'RestartDelegator', 'SetAzureVerbosity', 'RestartAzureHound')
 $__hasConfigParams = $false
@@ -816,8 +1033,12 @@ $__suppressCollectionWarnings = $__hasConfigParams -and -not $__hasCollectionTog
 # Warn about potentially sensitive content (skip in configuration-only mode)
 if (-not $__suppressCollectionWarnings) {
     Write-Warning 'This collection will include the below data!'
-    if ($All.IsPresent) { 
+    if ($AllPlusPerf.IsPresent) { 
         Write-Host '-------> ALL logs will be collected: SharpHound, AzureHound, and Windows event logs.' -ForegroundColor DarkCyan
+        Write-Host '-------> Performance Monitor trace will be started and run until manually stopped.' -ForegroundColor DarkCyan
+    } elseif ($All.IsPresent) { 
+        Write-Host '-------> ALL logs will be collected: SharpHound, AzureHound, and Windows event logs.' -ForegroundColor DarkCyan
+        Write-Host '-------> Automated collection mode - no user input required.' -ForegroundColor DarkCyan
     } else {
         if (-not $ExcludeEventLogs) { Write-Host '-------> Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.' -ForegroundColor DarkCyan } 
         if (-not $ExcludeSettings) { Write-Host '-------> settings.json will be collected; use -ExcludeSettings to skip.' -ForegroundColor DarkCyan } 
@@ -843,7 +1064,7 @@ if ($hasConfigParams -and -not $PSBoundParameters.ContainsKey('ExcludeEventLogs'
     
     # Handle SharpHound config changes and/or explicit restart request
     if ($PSBoundParameters.ContainsKey('SetLogLevel') -or $PSBoundParameters.ContainsKey('SetEnumerationLogLevel') -or $PSBoundParameters.ContainsKey('RestartDelegator')) {
-        $svc = Get-ServiceObject -Name $ServiceName
+        $svc = Get-ServiceObject -Name "SHDelegator"
         $profilePath = $null
         if ($svc) {
             Write-Info "Using service '$($svc.Name)' (DisplayName: '$($svc.DisplayName)') running as '$($svc.StartName)'"
@@ -860,7 +1081,7 @@ if ($hasConfigParams -and -not $PSBoundParameters.ContainsKey('ExcludeEventLogs'
         $didChange = $false
         if ($desiredLevel) { Set-BHELogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredLevel -StatusList $records; $didChange = $true }
         if ($desiredEnumLevel) { Set-BHEEnumerationLogLevel -ServiceProfilePath $profilePath -DesiredLevel $desiredEnumLevel -StatusList $records; $didChange = $true }
-        if ($RestartDelegator) { Try-RestartDelegatorService -Name $ServiceName }
+        if ($RestartDelegator) { Try-RestartDelegatorService -Name "SHDelegator" }
     }
     
     # Handle AzureHound config changes
@@ -892,7 +1113,8 @@ try {
 }
 
 $interactive = $Host.UI -and $Host.UI.RawUI
-if ($interactive) {
+# Skip interactive prompt for -All and -AllPlusPerf to allow automated collection
+if ($interactive -and -not $All.IsPresent -and -not $AllPlusPerf.IsPresent) {
     try {
         if (-not (Wait-ForEnter)) {
             Write-Host "Exiting by user request." -ForegroundColor Yellow
@@ -902,6 +1124,12 @@ if ($interactive) {
         Write-Host "Interactive mode failed, falling back to non-interactive..." -ForegroundColor Yellow
         $interactive = $false
     }
+} elseif ($All.IsPresent) {
+    Write-Host "Automated collection mode (-All): Proceeding without user input..." -ForegroundColor Green
+    $interactive = $false
+} elseif ($AllPlusPerf.IsPresent) {
+    Write-Host "Automated collection mode (-AllPlusPerf): Proceeding without user input..." -ForegroundColor Green
+    $interactive = $false
 }
 
 try {
@@ -925,7 +1153,7 @@ try {
 
     # Determine collection mode
     $mode = 'SharpHound'
-    if ($All.IsPresent) {
+    if ($All.IsPresent -or $AllPlusPerf.IsPresent) {
         $mode = 'All'
     } elseif ($interactive) { 
         $mode = Prompt-SelectTarget 
@@ -935,7 +1163,7 @@ try {
     $svc = $null
     $profilePath = $null
     if ($mode -in @('SharpHound', 'All')) {
-        $svc = Get-ServiceObject -Name $ServiceName
+        $svc = Get-ServiceObject -Name "SHDelegator"
         if ($svc) {
             Write-Info "Using service '$($svc.Name)' (DisplayName: '$($svc.DisplayName)') running as '$($svc.StartName)'"
             $profilePath = Get-ProfilePathFromServiceStartName -StartName $svc.StartName
@@ -969,6 +1197,11 @@ try {
         
         # AzureHound files
         Collect-AzureHoundFilesWithStatus -DestinationFolder $workDir -StatusList $records
+
+        # If AllPlusPerf, also ensure perfmon is set up and zip perf separately
+        if ($AllPlusPerf.IsPresent) {
+            try { Setup-BHEPerfmon } catch { Write-Warn "Perfmon setup failed: $($_.Exception.Message)" }
+        }
         
     } elseif ($mode -eq 'SharpHound') {
         # Parameter-only: set BHE LogLevel and EnumerationLogLevel
@@ -1012,3 +1245,4 @@ try {
 } finally {
     try { Stop-Transcript | Out-Null } catch { }
 }
+
