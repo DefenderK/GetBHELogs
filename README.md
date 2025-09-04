@@ -18,6 +18,7 @@ Designed for support and troubleshooting.
 * Creates a **timestamped folder and zip** in the chosen output directory (Desktop by default).
 * When using `-All`, collects **all** logs simultaneously: SharpHound, AzureHound, and Windows event logs.
 * When using `-AllPlusPerf`, it additionally creates a Performance Monitor Data Collector Set and starts the trace. It creates the output blg file in `C:\PerfLogs`
+* When using `-GetCompStatus`, analyzes a compstatus.csv file to provide troubleshooting insights about system availability and permission issues.
 
 ---
 
@@ -120,6 +121,12 @@ From an elevated PowerShell prompt in the scripts directory:
 .\GetBHESupportLogsTool.ps1 -GetBHEPerfmon
 ```
 
+#### CompStatus Analysis
+```powershell
+# Analyze compstatus.csv file for troubleshooting
+.\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv'
+```
+
 #### Help & Information
 ```powershell
 # Display help
@@ -161,9 +168,68 @@ From an elevated PowerShell prompt in the scripts directory:
 * `-GetBHEPerfmon [switch]` — Perfmon-only mode. If the Data Collector Set is running, you'll be prompted to stop it and then the trace files in `C:\PerfLogs` are zipped to Desktop as `<COMPUTERNAME>_PerfTrace.zip`. If it isn't present, the Data Collector Set is created and started with recommended counters.
 * `-DeleteBHEPerfmon [switch]` — Stop and delete the Data Collector Set.
 
+### Analysis Tools
+* `-GetCompStatus [string]` — Analyze a compstatus.csv file to provide troubleshooting insights. Shows status pivot tables, failure analysis, unreachable systems on port 445/TCP, subnet analysis, and permission issues.
+
 ### Utility
 * `-Help [switch]` — Display command line parameters and examples, then exit.
 
+
+---
+
+## CompStatus Analysis
+
+The script can analyze compstatus.csv files to provide troubleshooting insights about BloodHound Enterprise collection status. This feature helps identify:
+
+- **Status Overview**: Pivot tables showing task completion status (excluding GetMembersInAlias tasks)
+- **Failure Analysis**: Detailed breakdown of failed tasks and their status codes
+- **Network Connectivity**: Systems unreachable on port 445/TCP (SMB)
+- **Subnet Analysis**: IPv4 /24 and /16 subnet groupings of unreachable systems
+- **Permission Issues**: Systems with access denied errors
+
+### Usage
+
+```powershell
+# Analyze a compstatus.csv file
+.\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv'
+```
+
+### Sample Output
+
+```
+CompStatus Analysis Mode
+
+=== Status Pivot Table (Excluding GetMembersInAlias) ===
+Task                    Status      Count
+----                    ------      -----
+ComputerAvailability    Success     150
+ComputerAvailability    PortNotOpen 25
+GetDomainUsers          Success     120
+GetDomainUsers          ERROR_ACCESS_DENIED 5
+
+=== Failures Only ===
+Task                    Status              Count
+----                    ------              -----
+ComputerAvailability    PortNotOpen        25
+GetDomainUsers          ERROR_ACCESS_DENIED 5
+
+=== Systems Unreachable on 445/TCP ===
+ComputerName    IPAddress    Task                Status
+------------    ---------    ----                ------
+SERVER01        192.168.1.10 ComputerAvailability PortNotOpen
+SERVER02        192.168.1.11 ComputerAvailability PortNotOpen
+
+=== IPv4 /24 Subnets Unreachable on 445/TCP ===
+Name        Count
+----        -----
+192.168.1.0/24  15
+192.168.2.0/24  10
+
+=== Systems Missing Permissions ===
+ComputerName    Task          Status
+------------    ----          ------
+SERVER03        GetDomainUsers ERROR_ACCESS_DENIED
+```
 
 ---
 
@@ -237,7 +303,7 @@ The script can manage a lightweight performance monitor trace using Windows `log
 
 ```
 ========================================
-        BHE Logs Collector v.2.9       
+        BHE Logs Collector v.2.10       
 ========================================
 WARNING: This collection will include the below data!
 -------> Windows Application and System event logs will be collected; use -ExcludeEventLogs to skip.
@@ -300,6 +366,7 @@ You are free to use, modify, and distribute it with attribution. See the [LICENS
 
 
 ```
+
 
 
 
