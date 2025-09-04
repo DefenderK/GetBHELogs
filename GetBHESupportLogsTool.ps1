@@ -67,6 +67,7 @@ param(
     [switch]$AllPlusPerf,
     [switch]$GetBHEPerfmon,
     [switch]$DeleteBHEPerfmon,
+    [string]$GetCompStatus,
     [switch]$Help
 )
 
@@ -85,7 +86,7 @@ function Write-Warn {
 
 # Simple ASCII banner and UI helpers
 function Show-Banner {
-    $label = 'BHE Logs Collector v.2.9'
+    $label = 'BHE Logs Collector v.2.10'
     $width = [Math]::Max($label.Length + 8, 40)
     $border = ('=' * $width)
     $padLeft = [int][Math]::Floor(($width - $label.Length) / 2)
@@ -145,6 +146,7 @@ function Show-CommandLineHelp {
     Write-Host "  -AllPlusPerf                     Do -All plus set up perf tracing" -ForegroundColor White
     Write-Host "  -GetBHEPerfmon                   Only set up/start BHE perfmon trace" -ForegroundColor White
     Write-Host "  -DeleteBHEPerfmon                Delete the BHE perfmon collector and logs" -ForegroundColor White
+    Write-Host "  -GetCompStatus [path]            Analyze compstatus.csv file at specified path" -ForegroundColor White
     Write-Host "  -ExcludeEventLogs                Skip Windows event logs" -ForegroundColor White
     Write-Host "  -ExcludeSettings                 Skip settings.json" -ForegroundColor White
     Write-Host "  -SetLogLevel [level]             Set LogLevel (Trace|Debug|Information)" -ForegroundColor White
@@ -156,7 +158,7 @@ function Show-CommandLineHelp {
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Cyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -Help" -ForegroundColor DarkCyan
-    Write-Host "  .\GetBHESupportLogsTool.ps1 -OutputRoot C:\Temp" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -OutputRoot 'C:\Temp'" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -All" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -AllPlusPerf" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -GetBHEPerfmon" -ForegroundColor DarkCyan
@@ -166,6 +168,7 @@ function Show-CommandLineHelp {
     Write-Host "  .\GetBHESupportLogsTool.ps1 -LogArchiveNumber 10" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -SetAzureVerbosity 2 -RestartAzureHound" -ForegroundColor DarkCyan
     Write-Host "  .\GetBHESupportLogsTool.ps1 -RestartDelegator" -ForegroundColor DarkCyan
+    Write-Host "  .\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv'" -ForegroundColor DarkCyan
 }
 
 function Add-Status {
@@ -788,6 +791,74 @@ function Try-RestartAzureHoundService {
 }
 
 # ========================
+# CompStatus Analysis Section
+# ========================
+
+function Invoke-CompStatusAnalysis {
+    param(
+        [string]$CsvPath
+    )
+    
+    if (-not (Test-Path -LiteralPath $CsvPath)) {
+        Write-Error "CompStatus CSV file not found: $CsvPath"
+        return
+    }
+    
+    Write-Host "Analyzing CompStatus data from: $CsvPath" -ForegroundColor Cyan
+    Write-Host ""
+    
+    try {
+        # Import data and get uniques without sorting them
+        $stats_file = Import-Csv -Path $CsvPath | Group-Object ComputerName, Task, Status, IPAddress | ForEach-Object { $_.Group[0] }
+        
+        Write-Host "=== Status Pivot Table (Excluding GetMembersInAlias) ===" -ForegroundColor Yellow
+        $stats_file | Where-Object {$_.Task -NotLike 'GetMembersInAlias -*'} | Group-Object Task, Status -NoElement | Format-Table -Autosize
+        
+        Write-Host ""
+        Write-Host "=== Failures Only ===" -ForegroundColor Yellow
+        $stats_file | Where-Object {$_.Status -ne "Success"} | Group-Object Task,Status -NoElement | Format-Table -Autosize
+        
+        Write-Host ""
+        Write-Host "=== Systems Unreachable on 445/TCP ===" -ForegroundColor Yellow
+        $unreachable = $stats_file | Where-Object {$_.Task -eq "ComputerAvailability" -and $_.Status -eq "PortNotOpen"}
+        if ($unreachable) {
+            $unreachable | Format-Table -Autosize
+        } else {
+            Write-Host "No systems unreachable on port 445/TCP" -ForegroundColor Green
+        }
+        
+        Write-Host ""
+        Write-Host "=== IPv4 /24 Subnets Unreachable on 445/TCP ===" -ForegroundColor Yellow
+        $ipv4Unreachable = $stats_file | Where-Object {$_.Task -eq "ComputerAvailability" -and $_.Status -eq "PortNotOpen" -and $_.IPAddress -match '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'}
+        if ($ipv4Unreachable) {
+            $ipv4Unreachable | Group-Object {$_.IPAddress.Remove($_.IPAddress.LastIndexOf('.'))+'.0/24'} -NoElement | Sort-Object -Property Count | Format-Table -Autosize
+        } else {
+            Write-Host "No IPv4 systems unreachable on port 445/TCP" -ForegroundColor Green
+        }
+        
+        Write-Host ""
+        Write-Host "=== IPv4 /16 Subnets Unreachable on 445/TCP ===" -ForegroundColor Yellow
+        if ($ipv4Unreachable) {
+            $ipv4Unreachable | Group-Object {($_.IPAddress.split(".")[0..1] -join ".") + ".0.0/16"} -NoElement | Sort-Object -Property Count | Format-Table -Autosize
+        } else {
+            Write-Host "No IPv4 systems unreachable on port 445/TCP" -ForegroundColor Green
+        }
+        
+        Write-Host ""
+        Write-Host "=== Systems Missing Permissions ===" -ForegroundColor Yellow
+        $permissionIssues = $stats_file | Where-Object {$_.Status -eq "ERROR_ACCESS_DENIED" -or $_.Status -eq "StatusAccessDenied"}
+        if ($permissionIssues) {
+            $permissionIssues | Format-Table -Autosize
+        } else {
+            Write-Host "No permission issues found" -ForegroundColor Green
+        }
+        
+    } catch {
+        Write-Error "Failed to analyze CompStatus data: $($_.Exception.Message)"
+    }
+}
+
+# ========================
 # Perfmon Collector Section
 # ========================
 function Setup-BHEPerfmon {
@@ -1018,6 +1089,29 @@ if ($GetBHEPerfmon.IsPresent) {
 }
 if ($DeleteBHEPerfmon.IsPresent) {
     Setup-BHEPerfmon -Delete
+    return
+}
+
+# Early handler for compstatus analysis
+if ($PSBoundParameters.ContainsKey('GetCompStatus')) {
+    Write-Host "CompStatus Analysis Mode" -ForegroundColor Cyan
+    Write-Host ""
+    
+    if ([string]::IsNullOrWhiteSpace($GetCompStatus)) {
+        Write-Error "GetCompStatus parameter requires a path to the compstatus.csv file."
+        Write-Host "Usage: .\GetBHESupportLogsTool_Latest.ps1 -GetCompStatus <path_to_compstatus.csv>" -ForegroundColor Yellow
+        return
+    }
+    
+    if (-not (Test-Path -LiteralPath $GetCompStatus)) {
+        Write-Error "CompStatus CSV file not found: $GetCompStatus"
+        return
+    }
+    
+    Write-Info "Analyzing compstatus.csv file: $GetCompStatus"
+    
+    # Perform the analysis
+    Invoke-CompStatusAnalysis -CsvPath $GetCompStatus
     return
 }
 
