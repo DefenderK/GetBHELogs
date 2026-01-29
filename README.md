@@ -125,6 +125,12 @@ From an elevated PowerShell prompt in the scripts directory:
 ```powershell
 # Analyze compstatus.csv file for troubleshooting
 .\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv'
+
+# Save CompStatus output to a log file
+.\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv' -CompOutputPath 'C:\Temp\compstatus.log'
+
+# Save CompStatus output to a folder (creates a timestamped log)
+.\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv' -CompOutputPath 'C:\Temp'
 ```
 
 #### Help & Information
@@ -170,6 +176,7 @@ From an elevated PowerShell prompt in the scripts directory:
 
 ### Analysis Tools
 * `-GetCompStatus [string]` — Analyze a compstatus.csv file to provide troubleshooting insights. Shows status pivot tables, failure analysis, unreachable systems on port 445/TCP, subnet analysis, and permission issues.
+* `-CompOutputPath [string]` — Save CompStatus console output to a log file (use with `-GetCompStatus`). Provide a file path or a folder path.
 
 ### Utility
 * `-Help [switch]` — Display command line parameters and examples, then exit.
@@ -192,6 +199,12 @@ The script can analyze compstatus.csv files to provide troubleshooting insights 
 ```powershell
 # Analyze a compstatus.csv file
 .\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv'
+
+# Save CompStatus output to a log file
+.\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv' -CompOutputPath 'C:\Temp\compstatus.log'
+
+# Save CompStatus output to a folder (creates a timestamped log)
+.\GetBHESupportLogsTool.ps1 -GetCompStatus 'C:\path\to\compstatus.csv' -CompOutputPath 'C:\Temp'
 ```
 
 ### Sample Output
